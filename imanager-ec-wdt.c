@@ -18,8 +18,8 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 #include <linux/swab.h>
-#include <linux/mfd/imanager/ec.h>
-#include <linux/mfd/imanager/wdt.h>
+#include "ec.h"
+#include "wdt.h"
 
 /* Timer resolution */
 #define WDT_FREQ	10 /* Hz */

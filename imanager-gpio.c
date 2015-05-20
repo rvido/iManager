@@ -18,9 +18,9 @@
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/version.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/gpio.h>
+#include "compat.h"
+#include "core.h"
+#include "gpio.h"
 
 struct imanager_gpio_data {
 	struct imanager_device_data *ec;

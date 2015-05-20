@@ -14,8 +14,8 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include <linux/mfd/imanager/ec.h>
-#include <linux/mfd/imanager/backlight.h>
+#include "ec.h"
+#include "backlight.h"
 
 struct brightness_level {
 	u32	value	: 7,	/* Brightness Value  - LSB [6..0] */

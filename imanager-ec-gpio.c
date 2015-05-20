@@ -14,9 +14,9 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/ec.h>
-#include <linux/mfd/imanager/gpio.h>
+#include "compat.h"
+#include "ec.h"
+#include "gpio.h"
 
 #define EC_GPIOF_DIR_OUT	(1 << 6)
 #define EC_GPIOF_DIR_IN		(1 << 7)

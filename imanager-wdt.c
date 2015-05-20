@@ -21,9 +21,9 @@
 #include <linux/uaccess.h>
 #include <linux/platform_device.h>
 #include <linux/version.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/wdt.h>
+#include "compat.h"
+#include "core.h"
+#include "wdt.h"
 
 #define WATCHDOG_TIMEOUT 30 /* in seconds */
 

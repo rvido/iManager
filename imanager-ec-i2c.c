@@ -14,8 +14,8 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include <linux/mfd/imanager/ec.h>
-#include <linux/mfd/imanager/i2c.h>
+#include "ec.h"
+#include "i2c.h"
 
 #define I2C_SMBUS_BLOCK_SIZE	32
 

@@ -15,8 +15,8 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 #include <linux/swab.h>
-#include <linux/mfd/imanager/ec.h>
-#include <linux/mfd/imanager/hwmon.h>
+#include "ec.h"
+#include "hwmon.h"
 
 #define HWM_STATUS_UNDEFINED_ITEM	2UL
 #define HWM_STATUS_UNDEFINED_DID	3UL

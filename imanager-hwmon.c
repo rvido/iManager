@@ -26,10 +26,10 @@
 #include <linux/mutex.h>
 #include <linux/io.h>
 #include <linux/version.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/hwmon.h>
+#include "core.h"
+#include "hwmon.h"
 #define __NEED_HWMON_COMPAT__
-#include <linux/mfd/imanager/compat.h>
+#include "compat.h"
 
 struct imanager_hwmon_data {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)

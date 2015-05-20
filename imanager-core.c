@@ -19,9 +19,9 @@
 #include <linux/io.h>
 #include <linux/version.h>
 #include <linux/mfd/core.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/ec.h>
+#include "compat.h"
+#include "core.h"
+#include "ec.h"
 
 static unsigned short force_id;
 module_param(force_id, ushort, 0);

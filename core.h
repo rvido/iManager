@@ -16,7 +16,7 @@
 #include <linux/mutex.h>
 #include <linux/io.h>
 #include <linux/types.h>
-#include <linux/mfd/imanager/ec.h>
+#include "ec.h"
 
 enum chips { IT8516, IT8518, IT8528 };
 

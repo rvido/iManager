@@ -18,9 +18,9 @@
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
 #include <linux/version.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/i2c.h>
+#include "compat.h"
+#include "core.h"
+#include "i2c.h"
 
 static uint bus_frequency = 100;
 module_param(bus_frequency, uint, 0);

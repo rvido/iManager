@@ -16,7 +16,7 @@
 #include <linux/byteorder/generic.h>
 #include <linux/module.h>
 #include <linux/swab.h>
-#include <linux/mfd/imanager/ec.h>
+#include "ec.h"
 
 /**
  * This is the delay time between two EC transactions.

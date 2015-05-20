@@ -22,9 +22,9 @@
 #include <linux/fb.h>
 #include <linux/pwm.h>
 #include <linux/version.h>
-#include <linux/mfd/imanager/compat.h>
-#include <linux/mfd/imanager/core.h>
-#include <linux/mfd/imanager/backlight.h>
+#include "compat.h"
+#include "core.h"
+#include "backlight.h"
 
 #define BL_MAX_BRIGHTNESS	100
 
