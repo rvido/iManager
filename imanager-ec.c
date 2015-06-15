@@ -554,7 +554,7 @@ static const struct ec_device_table devtbl[] = {
 	}, {
 		.id = ADCCurrent,
 		.type = ADC,
-		.label = "VImon",
+		.label = "Imon",
 	}, {
 		.id = WDIRQ,
 		.type = IRQ,

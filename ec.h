@@ -76,6 +76,10 @@
 #define EC_ACPIRAM_BLC_LEVEL2		0x52
 #define EC_ACPIRAM_BLC_CTRL		0x99
 #define EC_ACPIRAM_FW_RELEASE_RD	0xF8
+#define EC_ACPIRAM_THERMAL_LOCAL1	0x60
+#define EC_ACPIRAM_THERMAL_LOCAL2	0x63
+#define EC_ACPIRAM_THERMAL_REMOTE1	0x61
+#define EC_ACPIRAM_THERMAL_REMOTE2	0x64
 
 struct ec_message_header {
 	u8 addr_low;	/* SMB low-byte address or data byte
@@ -133,6 +137,7 @@ struct fan_cfg {
 	u32		hwp;		/* Hardware Pin number */
 	u32		pulse;		/* FAN pulse type */
 	const char	*label;
+	bool		has_thermal_sens;
 };
 
 struct gpio_cfg {

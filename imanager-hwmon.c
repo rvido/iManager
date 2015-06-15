@@ -1001,7 +1001,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 
 	for (i = 0; i < HWM_MAX_FAN; i++) {
 		if (!hwm_core_check_fan(i)) {
-			/* set active fan to automatice speed control */
+			/* set active fan to automatic speed control */
 			hwm_core_set_fan_ctrl(i, MODE_AUTO, CTRL_RPM, 0, 0,
 					      NULL, NULL);
 			hwm_core_get_fan_ctrl(i, &data->hwm.fan[i]);

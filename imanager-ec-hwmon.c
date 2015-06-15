@@ -23,9 +23,9 @@
 #define HWM_STATUS_UNDEFINED_HWPIN	4UL
 
 struct fan_dev_settings {
-	u8	did,		/* Device ID */
-		hwp,		/* HW Pin number */
-		tachoid,	/* Tacho ID */
+	u8	did,
+		hwp,
+		tachoid,
 		status,
 		control,
 		temp_max,
@@ -136,6 +136,30 @@ static inline int hwm_set_pwm_value(u8 did, u8 val)
 	return imanager_write_byte(EC_CMD_HWP_WR, did, val);
 }
 
+int hwm_core_get_thermal_temp(enum fan_unit unit)
+{
+	int ret;
+
+	switch (unit) {
+	case FAN_CPU:
+		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_REMOTE1);
+		break;
+	case FAN_SYS1:
+		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_LOCAL1);
+		break;
+	case FAN_SYS2:
+		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_REMOTE2);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (!ret || (ret > 0x80))
+		return -ERANGE;
+
+	return ret;
+}
+
 static int hwm_read_fan_config(int fnum, struct fan_dev_settings *dev)
 {
 	int ret;
@@ -152,7 +176,7 @@ static int hwm_read_fan_config(int fnum, struct fan_dev_settings *dev)
 	if (ret)
 		return ret;
 
-	if (_dev->did == 0)
+	if (!_dev->did)
 		return -ENODEV;
 
 	memcpy(dev, &msg.u.data, sizeof(struct fan_dev_settings));
@@ -171,7 +195,7 @@ static int hwm_write_fan_config(int fnum, struct fan_dev_settings *dev)
 	if (WARN_ON(!dev))
 		return -EINVAL;
 
-	if (dev->did == 0)
+	if (!dev->did)
 		return -ENODEV;
 
 	msg.data = (u8 *)dev;
@@ -417,9 +441,13 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 
 	fan->pwm = ret;
 
-	fan->alarm = ((fan->pwm > 0) && (fan->speed == 0)) ? 1 : 0;
+	fan->alarm = (fan->pwm && !fan->speed) ? 1 : 0;
 
-	fan->temp		= dev.temp;
+	if (sensors.fan[unit].has_thermal_sens)
+		fan->temp = hwm_core_get_thermal_temp(unit);
+	else
+		fan->temp = dev.temp;
+
 	fan->limit.temp.min	= dev.temp_min;
 	fan->limit.temp.max	= dev.temp_max;
 	fan->limit.temp.stop	= dev.temp_stop;
@@ -432,7 +460,7 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 	if (ret)
 		return ret;
 
-	fan->valid = 1;
+	fan->valid = true;
 
 	return 0;
 }
@@ -594,6 +622,7 @@ int hwm_core_set_fan_limit_temp(enum fan_unit unit, int stop, int min, int max)
 int hwm_core_init(void)
 {
 	int ret;
+	int i;
 
 	memset(&sensors, 0, sizeof(sensors));
 
@@ -609,6 +638,14 @@ int hwm_core_init(void)
 	if (ret)
 		return ret;
 
+	for (i = 0; i < HWM_MAX_FAN; i++) {
+		ret = hwm_core_get_thermal_temp(i);
+		if (ret < 0)
+			continue;
+		else
+			sensors.fan[i].has_thermal_sens = true;
+	}
+
 	return 0;
 }
 
@@ -616,3 +653,4 @@ void hwm_core_release(void)
 {
 	memset(&sensors, 0, sizeof(sensors));
 }
+
