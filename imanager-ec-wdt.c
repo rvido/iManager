@@ -18,8 +18,8 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 #include <linux/swab.h>
-#include "ec.h"
-#include "wdt.h"
+#include <ec.h>
+#include <wdt.h>
 
 /* Timer resolution */
 #define WDT_FREQ	10 /* Hz */
@@ -34,21 +34,16 @@ enum wdt_ctrl {
 };
 
 struct wdt_event_delay {
-	u16 delay,
-	    pwrbtn,
-	    nmi,
-	    reset,
-	    wdpin,
-	    sci;
-	u16 dummy;
+	u16	delay,
+		pwrbtn,
+		nmi,
+		reset,
+		wdpin,
+		sci,
+		dummy;
 };
 
-struct watchdog_data {
-	struct ec_info info;
-	struct wdt_cfg did;
-};
-
-static struct watchdog_data watchdog;
+static const struct imanager_watchdog_device *dev;
 
 static inline int set_timer(enum wdt_ctrl ctrl)
 {
@@ -76,8 +71,7 @@ wdt_ctrl(enum wdt_ctrl ctrl, enum wdt_event type, unsigned int timeout)
 		memset(event, 0xff, sizeof(*event));
 		msg.wlen = sizeof(*event);
 		*fevent = 0;
-		val = (timeout == 0) ? 0xffff :
-					swab16(timeout * WDT_FREQ);
+		val = (!timeout) ? 0xffff : swab16(timeout * WDT_FREQ);
 
 		switch (type) {
 		case DELAY:
@@ -164,22 +158,13 @@ int wdt_core_disable_all(void)
 
 int wdt_core_init(void)
 {
-	int ret;
-
-	memset(&watchdog, 0, sizeof(watchdog));
-
-	ret = imanager_get_fw_info(&watchdog.info);
-	if (ret < 0)
-		return ret;
-
-	ret = imanager_get_wdt_cfg(&watchdog.did);
-	if (ret < 0)
-		return ret;
+	dev = imanager_get_watchdog_device();
+	if (!dev)
+		return -ENODEV;
 
 	return 0;
 }
 
 void wdt_core_release(void)
 {
-	memset(&watchdog, 0, sizeof(watchdog));
 }

@@ -1,5 +1,5 @@
 /*
- * Advantech iManager I2C bus
+ * Advantech iManager I2C bus driver
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -18,9 +18,9 @@
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
 #include <linux/version.h>
-#include "compat.h"
-#include "core.h"
-#include "i2c.h"
+#include <compat.h>
+#include <core.h>
+#include <i2c.h>
 
 static uint bus_frequency = 100;
 module_param(bus_frequency, uint, 0);

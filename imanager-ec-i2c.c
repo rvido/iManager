@@ -14,8 +14,8 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include "ec.h"
-#include "i2c.h"
+#include <ec.h>
+#include <i2c.h>
 
 #define I2C_SMBUS_BLOCK_SIZE	32
 
@@ -34,17 +34,12 @@
 
 #define EC_SMB_DID(N)		(0x28 + N)
 
-struct i2c_data {
-	struct ec_info info;
-	struct i2c_cfg cfg;
-};
-
 struct ec_i2c_status {
 	u32 error	: 7;
 	u32 complete	: 1;
 };
 
-static struct i2c_data i2c;
+static const struct imanager_smbus_device *dev;
 
 static int i2c_core_eval_status(u8 _status)
 {
@@ -98,7 +93,7 @@ static int i2c_core_blk_wr_rw_combined(u8 proto, struct ec_message *msg)
 	if (err)
 		return err;
 
-	err = i2c_send_message(proto, i2c.cfg.i2coem, msg);
+	err = i2c_send_message(proto, dev->i2coem->did, msg);
 	if (err)
 		return err;
 
@@ -114,6 +109,7 @@ static int i2c_core_blk_wr_rw_combined(u8 proto, struct ec_message *msg)
 	return 0;
 }
 
+/* Write-Read and Read-Write wrappers */
 static inline int i2c_core_wr_combined(struct ec_message *msg)
 {
 	return i2c_core_blk_wr_rw_combined(EC_CMD_I2C_WR, msg);
@@ -280,7 +276,7 @@ int i2c_core_write_block_data(u16 addr, u8 cmd, u8 *buf)
 	};
 
 	if ((buf[0] == 0) || (buf[0] >= I2C_MAX_WRITE_BYTES)) {
-		pr_err("Invalid write length %d\n", buf[0]);
+		pr_err("%s: Invalid write length %d\n", __func__, buf[0]);
 		return -EINVAL;
 	}
 
@@ -461,19 +457,14 @@ int i2c_core_smb_set_freq(u32 bus_id, u32 freq)
 
 int i2c_core_init(void)
 {
-	int ret;
+	dev = imanager_get_smb_device();
+	if (!dev)
+		return -ENODEV;
 
-	memset(&i2c, 0, sizeof(i2c));
-
-	ret = imanager_get_fw_info(&i2c.info);
-	if (ret)
-		return ret;
-
-	return imanager_get_i2c_cfg(&i2c.cfg);
+	return 0;
 }
 
 void i2c_core_release(void)
 {
-	memset(&i2c, 0, sizeof(i2c));
 }
 

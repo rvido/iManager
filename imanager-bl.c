@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Backlight/Brightness core
+ * Advantech iManager Backlight driver
  * Partially derived from wm831x_bl
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
@@ -22,9 +22,9 @@
 #include <linux/fb.h>
 #include <linux/pwm.h>
 #include <linux/version.h>
-#include "compat.h"
-#include "core.h"
-#include "backlight.h"
+#include <compat.h>
+#include <core.h>
+#include <backlight.h>
 
 #define BL_MAX_BRIGHTNESS	100
 
@@ -32,9 +32,9 @@ static bool polarity = PWM_POLARITY_NORMAL;
 module_param(polarity, bool, 0);
 MODULE_PARM_DESC(polarity, "Select backlight polarity (inverted := 1)");
 
-static uint unit = UNIT_1;
-module_param(unit, uint, 0);
-MODULE_PARM_DESC(unit, "Select backlight control unit {0,1} (defaults to 0)");
+static ushort unit = UNIT_1;
+module_param(unit, ushort, 0);
+MODULE_PARM_DESC(unit, "Select backlight control unit [0, 1] (defaults to 0)");
 
 struct imanager_backlight_data {
 	struct imanager_device_data *ec;

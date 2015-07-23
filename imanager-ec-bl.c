@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Backlight/Brightness core
+ * Advantech iManager Backlight/Brightness Core
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -14,8 +14,8 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include "ec.h"
-#include "backlight.h"
+#include <ec.h>
+#include <backlight.h>
 
 struct brightness_level {
 	u32	value	: 7,	/* Brightness Value  - LSB [6..0] */
@@ -29,39 +29,23 @@ struct backlight_ctrl {
 		dnc	: 5;	/* Do Not Care		    - bit [7..3] */
 };
 
-struct backlight_data {
-	struct ec_info info;
-	struct backlight_cfg cfg[EC_BLC_MAX_NUM];
-};
+static const struct imanager_backlight_device *dev;
 
-static struct backlight_data backlight = {
-	.cfg[0] = {
-		.did = 0,
-		.blid = EC_ACPIRAM_BLC_LEVEL1,
-		.label = NULL,
-	},
-	.cfg[1] = {
-		.did = 0,
-		.blid = EC_ACPIRAM_BLC_LEVEL2,
-		.label = NULL,
-	},
-};
-
-int bl_core_get_pwm_pulse_width(enum bl_unit unit)
+int bl_core_get_pwm_pulse_width(u32 unit)
 {
 	int ret;
 
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_HWP_RD, backlight.cfg[unit].did);
+	ret = imanager_read_byte(EC_CMD_HWP_RD, dev->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM value of BLC%d\n", unit);
 
 	return ret;
 }
 
-int bl_core_set_pwm_pulse_width(enum bl_unit unit, u32 pwm)
+int bl_core_set_pwm_pulse_width(u32 unit, u32 pwm)
 {
 	int ret;
 
@@ -70,7 +54,7 @@ int bl_core_set_pwm_pulse_width(enum bl_unit unit, u32 pwm)
 
 	pwm = pwm > 100 ? 100 : pwm;
 
-	ret = imanager_write_byte(EC_CMD_HWP_WR, backlight.cfg[unit].did, pwm);
+	ret = imanager_write_byte(EC_CMD_HWP_WR, dev->attr[unit].did, pwm);
 	if (ret < 0)
 		pr_err("Failed writing PWM value '%d' of BLC%d\n",
 			pwm, unit);
@@ -78,21 +62,21 @@ int bl_core_set_pwm_pulse_width(enum bl_unit unit, u32 pwm)
 	return ret;
 }
 
-int bl_core_get_pwm_frequency(enum bl_unit unit)
+int bl_core_get_pwm_frequency(u32 unit)
 {
 	int ret;
 
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_word(EC_CMD_PWM_FREQ_RD, backlight.cfg[unit].did);
+	ret = imanager_read_word(EC_CMD_PWM_FREQ_RD, dev->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM frequency of BLC%d\n", unit);
 
 	return ret;
 }
 
-int bl_core_set_pwm_frequency(enum bl_unit unit, u16 freq)
+int bl_core_set_pwm_frequency(u32 unit, u16 freq)
 {
 	int ret;
 
@@ -101,7 +85,7 @@ int bl_core_set_pwm_frequency(enum bl_unit unit, u16 freq)
 
 	freq = freq < 10 ? 10 : freq;
 
-	ret = imanager_write_word(EC_CMD_PWM_FREQ_WR, backlight.cfg[unit].did,
+	ret = imanager_write_word(EC_CMD_PWM_FREQ_WR, dev->attr[unit].did,
 				  freq);
 	if (ret < 0)
 		pr_err("Failed writing PWM frequency (%d) of BLC%d\n",
@@ -110,14 +94,14 @@ int bl_core_set_pwm_frequency(enum bl_unit unit, u16 freq)
 	return ret;
 }
 
-int bl_core_set_brightness_polarity2(enum bl_unit unit, u32 polarity)
+int bl_core_set_brightness_polarity2(u32 unit, u32 polarity)
 {
 	int ret;
 
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_PWM_POL_WR, backlight.cfg[unit].did,
+	ret = imanager_write_byte(EC_CMD_PWM_POL_WR, dev->attr[unit].did,
 				  polarity);
 	if (ret < 0)
 		pr_err("Failed writing PWM polarity of BLC%d\n", unit);
@@ -125,21 +109,21 @@ int bl_core_set_brightness_polarity2(enum bl_unit unit, u32 polarity)
 	return ret;
 }
 
-int bl_core_get_brightness_polarity2(enum bl_unit unit)
+int bl_core_get_brightness_polarity2(u32 unit)
 {
 	int ret;
 
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_PWM_POL_RD, backlight.cfg[unit].did);
+	ret = imanager_read_byte(EC_CMD_PWM_POL_RD, dev->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM polarity value of BLC%d\n", unit);
 
 	return ret;
 }
 
-int bl_core_get_backlight_level(enum bl_unit unit)
+int bl_core_get_backlight_level(u32 unit)
 {
 	int ret;
 	u8 val8 = 0;
@@ -148,7 +132,7 @@ int bl_core_get_backlight_level(enum bl_unit unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(backlight.cfg[unit].did);
+	ret = imanager_acpiram_read_byte(dev->attr[unit].did);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
@@ -156,7 +140,7 @@ int bl_core_get_backlight_level(enum bl_unit unit)
 	return pl->value;
 }
 
-int bl_core_set_backlight_level(enum bl_unit unit, u32 level)
+int bl_core_set_backlight_level(u32 unit, u32 level)
 {
 	int ret;
 	u8 val8 = 0;
@@ -169,14 +153,14 @@ int bl_core_set_backlight_level(enum bl_unit unit, u32 level)
 	pl->value = level > 9 ? 9 : level;
 	pl->enable = 1;
 
-	ret = imanager_acpiram_write_byte(backlight.cfg[unit].did, val8);
+	ret = imanager_acpiram_write_byte(dev->attr[unit].did, val8);
 	if (ret)
 		return ret;
 
 	return 0;
 }
 
-int bl_core_set_backlight_ctrl(enum bl_unit unit, u32 enable)
+int bl_core_set_backlight_ctrl(u32 unit, bool enable)
 {
 	int ret;
 	u8 val8;
@@ -185,21 +169,21 @@ int bl_core_set_backlight_ctrl(enum bl_unit unit, u32 enable)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(backlight.cfg[unit].blid);
+	ret = imanager_acpiram_read_byte(dev->brightness[unit]);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
 
 	pl->enable = enable ? 1 : 0;
 
-	ret = imanager_acpiram_write_byte(backlight.cfg[unit].did, val8);
+	ret = imanager_acpiram_write_byte(dev->attr[unit].did, val8);
 	if (ret)
 		return ret;
 
 	return 0;
 }
 
-int bl_core_get_backlight_ctrl(enum bl_unit unit)
+int bl_core_get_backlight_ctrl(u32 unit)
 {
 	int ret;
 	u8 val8;
@@ -208,7 +192,7 @@ int bl_core_get_backlight_ctrl(enum bl_unit unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(backlight.cfg[unit].did);
+	ret = imanager_acpiram_read_byte(dev->attr[unit].did);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
@@ -216,7 +200,7 @@ int bl_core_get_backlight_ctrl(enum bl_unit unit)
 	return pl->enable;
 }
 
-int bl_core_set_brightness_ctrl(u32 enable)
+int bl_core_set_brightness_ctrl(bool enable)
 {
 	int ret;
 	u8 val8;
@@ -319,23 +303,14 @@ int bl_core_get_brightness_polarity(void)
 
 int bl_core_init(void)
 {
-	int ret;
-
-	memset(&backlight.info, 0, sizeof(backlight.info));
-
-	ret = imanager_get_fw_info(&backlight.info);
-	if (ret < 0)
-		return ret;
-
-	ret = imanager_get_backlight_cfg(backlight.cfg);
-	if (ret < 0)
-		return ret;
+	dev = imanager_get_backlight_device();
+	if (!dev)
+		return -ENODEV;
 
 	return 0;
 }
 
 void bl_core_release(void)
 {
-	memset(&backlight, 0, sizeof(backlight));
 }
 

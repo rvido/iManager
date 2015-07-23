@@ -21,11 +21,6 @@
  */
 #define EC_MAX_GPIO	8
 
-#if ! defined(__KERNEL__)
-#define GPIOF_DIR_OUT   (0 << 0)
-#define GPIOF_DIR_IN    (1 << 0)
-#endif
-
 int gpio_core_init(void);
 void gpio_core_release(void);
 

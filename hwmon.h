@@ -10,8 +10,8 @@
  * option) any later version.
  */
 
-#ifndef __HWM_H__
-#define __HWM_H__
+#ifndef __HWMON_H__
+#define __HWMON_H__
 
 #include <linux/types.h>
 
@@ -31,6 +31,7 @@ struct hwm_voltage {
 	u32	average;
 	u32	lowest;
 	u32	highest;
+
 };
 
 struct hwm_fan_temp_limit {
@@ -65,9 +66,9 @@ struct hwm_smartfan {
 		type,
 		pwm,
 		speed,
-		temp,
 		pulse,
 		alarm;
+	int	temp;
 
 	struct hwm_sensors_limit	limit;
 	struct hwm_fan_alert		alert;
@@ -99,26 +100,22 @@ enum fan_mode {
 int hwm_core_init(void);
 void hwm_core_release(void);
 
-int hwm_core_check_adc(u32 num);
-int hwm_core_check_fan(enum fan_unit fan);
+int hwm_core_check_adc(int num);
+int hwm_core_check_fan(int num);
 
-int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan);
-int hwm_core_set_fan_ctrl(enum fan_unit unit,
-			  enum fan_mode mode,
-			  enum fan_ctrl_type type,
-			  u32 pwm,
-			  u32 pulse,
+int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan);
+int hwm_core_set_fan_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 			  struct hwm_sensors_limit *limit,
 			  struct hwm_fan_alert *alert);
 
-int hwm_core_set_fan_limit_rpm(enum fan_unit unit, int min, int max);
-int hwm_core_set_fan_limit_pwm(enum fan_unit unit, int min, int max);
-int hwm_core_set_fan_limit_temp(enum fan_unit unit, int stop, int min, int max);
+int hwm_core_set_fan_limit_rpm(int num, int min, int max);
+int hwm_core_set_fan_limit_pwm(int num, int min, int max);
+int hwm_core_set_fan_limit_temp(int num, int stop, int min, int max);
 
-int hwm_core_get_adc(u32 num, struct hwm_voltage *volt);
+int hwm_core_get_adc(int num, struct hwm_voltage *volt);
 
-const char * hwm_core_get_adc_label(u32 num);
-const char * hwm_core_get_fan_label(enum fan_unit unit);
-const char * hwm_core_get_fan_temp_label(enum fan_unit unit);
+const char * hwm_core_get_adc_label(int num);
+const char * hwm_core_get_fan_label(int num);
+const char * hwm_core_get_fan_temp_label(int num);
 
 #endif

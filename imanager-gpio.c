@@ -1,5 +1,5 @@
 /*
- * Advantech iManager GPIO
+ * Advantech iManager GPIO driver
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -18,9 +18,9 @@
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/version.h>
-#include "compat.h"
-#include "core.h"
-#include "gpio.h"
+#include <compat.h>
+#include <core.h>
+#include <gpio.h>
 
 struct imanager_gpio_data {
 	struct imanager_device_data *ec;

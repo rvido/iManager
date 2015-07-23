@@ -14,9 +14,8 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
-#include "compat.h"
-#include "ec.h"
-#include "gpio.h"
+#include <ec.h>
+#include <gpio.h>
 
 #define EC_GPIOF_DIR_OUT	(1 << 6)
 #define EC_GPIOF_DIR_IN		(1 << 7)
@@ -32,12 +31,7 @@
  *
  */
 
-struct gpio_data {
-	struct ec_info info;
-	struct gpio_cfg cfg[EC_GPIO_MAX_NUM];
-};
-
-static struct gpio_data gpio;
+static const struct imanager_gpio_device *dev;
 
 int gpio_core_get_state(u32 num)
 {
@@ -46,7 +40,7 @@ int gpio_core_get_state(u32 num)
 	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_HWP_RD, gpio.cfg[num].did);
+	ret = imanager_read_byte(EC_CMD_HWP_RD, dev->attr[num].did);
 	if (ret < 0)
 		pr_err("Failed to get GPIO pin state (%x)\n", num);
 
@@ -60,7 +54,7 @@ int gpio_core_set_state(u32 num, u32 state)
 	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_HWP_WR, gpio.cfg[num].did,
+	ret = imanager_write_byte(EC_CMD_HWP_WR, dev->attr[num].did,
 			    state ? EC_GPIOF_HIGH : EC_GPIOF_LOW);
 	if (ret) {
 		pr_err("Failed to set GPIO pin state (%x)\n", num);
@@ -77,7 +71,7 @@ int gpio_core_set_direction(u32 num, u32 dir)
 	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_GPIO_DIR_WR, gpio.cfg[num].did,
+	ret = imanager_write_byte(EC_CMD_GPIO_DIR_WR, dev->attr[num].did,
 			    dir ? EC_GPIOF_DIR_IN : EC_GPIOF_DIR_OUT);
 	if (ret) {
 		pr_err("Failed to set GPIO direction (%x, '%s')\n", num,
@@ -90,19 +84,14 @@ int gpio_core_set_direction(u32 num, u32 dir)
 
 int gpio_core_init(void)
 {
-	int ret;
+	dev = imanager_get_gpio_device();
+	if (!dev)
+		return -ENODEV;
 
-	memset(&gpio, 0, sizeof(gpio));
-
-	ret = imanager_get_fw_info(&gpio.info);
-	if (ret)
-		return ret;
-
-	return imanager_get_gpio_cfg(gpio.cfg);
+	return 0;
 }
 
 void gpio_core_release(void)
 {
-	memset(&gpio, 0, sizeof(gpio));
 }
 

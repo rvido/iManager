@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Hardware Monitoring
+ * Advantech iManager Hardware Monitoring driver
  * Derived from nct6775 driver
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
@@ -26,10 +26,10 @@
 #include <linux/mutex.h>
 #include <linux/io.h>
 #include <linux/version.h>
-#include "core.h"
-#include "hwmon.h"
+#include <core.h>
+#include <hwmon.h>
 #define __NEED_HWMON_COMPAT__
-#include "compat.h"
+#include <compat.h>
 
 struct imanager_hwmon_data {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
@@ -100,8 +100,7 @@ show_in(struct device *dev, struct device_attribute *attr, char *buf)
 	if (!adc)
 		return -EINVAL;
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->value * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->value));
 }
 
 static ssize_t
@@ -113,8 +112,7 @@ show_in_min(struct device *dev, struct device_attribute *attr, char *buf)
 	if (!adc)
 		return -EINVAL;
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->min * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->min));
 }
 
 static ssize_t
@@ -126,8 +124,7 @@ show_in_max(struct device *dev, struct device_attribute *attr, char *buf)
 	if (!adc)
 		return -EINVAL;
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->max * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->max));
 }
 
 static ssize_t
@@ -201,8 +198,7 @@ show_in_average(struct device *dev, struct device_attribute *attr, char *buf)
 		data->samples = 1;
 	}
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->average * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->average));
 }
 
 static ssize_t
@@ -217,8 +213,7 @@ show_in_lowest(struct device *dev, struct device_attribute *attr, char *buf)
 	else if (adc->value < adc->lowest)
 		adc->lowest = adc->value;
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->lowest * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->lowest));
 }
 
 static ssize_t
@@ -233,8 +228,7 @@ show_in_highest(struct device *dev, struct device_attribute *attr, char *buf)
 	else if (adc->value > adc->highest)
 		adc->highest = adc->value;
 
-	return sprintf(buf, "%u\n",
-			DIV_ROUND_CLOSEST(adc->highest * SCALE_IN, 1000));
+	return sprintf(buf, "%u\n", in_from_reg(adc->highest));
 }
 
 static ssize_t
@@ -823,7 +817,11 @@ static struct attribute *imanager_in_attributes[] = {
 	NULL
 };
 
+#ifdef __RHEL6__
+static mode_t
+#else
 static umode_t
+#endif
 imanager_in_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 {
 	int err;
@@ -857,8 +855,13 @@ static struct attribute *imanager_other_attributes[] = {
 	NULL
 };
 
-static umode_t imanager_other_is_visible(struct kobject *kobj,
-					 struct attribute *attr, int index)
+#ifdef __RHEL6__
+static mode_t
+#else
+static umode_t
+#endif
+imanager_other_is_visible(struct kobject *kobj,
+			  struct attribute *attr, int index)
 {
 	int err;
 
@@ -938,7 +941,11 @@ static struct attribute *imanager_fan_attributes[] = {
 	NULL
 };
 
+#ifdef __RHEL6__
+static mode_t
+#else
 static umode_t
+#endif
 imanager_fan_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 {
 	int err;
@@ -1005,7 +1012,6 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 			hwm_core_set_fan_ctrl(i, MODE_AUTO, CTRL_RPM, 0, 0,
 					      NULL, NULL);
 			hwm_core_get_fan_ctrl(i, &data->hwm.fan[i]);
-			/* Check if temperature sensor is active */
 			if (data->hwm.fan[i].temp != 0)
 				data->fan_num++;
 		}

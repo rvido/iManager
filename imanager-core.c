@@ -1,5 +1,5 @@
 /*
- * Advantech iManager MFD core (EC IT8518/28)
+ * Advantech iManager MFD core driver
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -19,9 +19,9 @@
 #include <linux/io.h>
 #include <linux/version.h>
 #include <linux/mfd/core.h>
-#include "compat.h"
-#include "core.h"
-#include "ec.h"
+#include <compat.h>
+#include <core.h>
+#include <ec.h>
 
 static unsigned short force_id;
 module_param(force_id, ushort, 0);
@@ -100,7 +100,7 @@ static ssize_t imanager_name_show(struct device *dev,
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 
-	return scnprintf(buf, PAGE_SIZE, "%s\n", pdata->info.pcb_name);
+	return scnprintf(buf, PAGE_SIZE, "%s\n", pdata->info->pcb_name);
 }
 
 static ssize_t imanager_kversion_show(struct device *dev,
@@ -109,8 +109,8 @@ static ssize_t imanager_kversion_show(struct device *dev,
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%d.%d\n",
-			 pdata->info.version.kernel_major,
-			 pdata->info.version.kernel_minor);
+			 pdata->info->version.kernel_major,
+			 pdata->info->version.kernel_minor);
 }
 
 static ssize_t imanager_fwversion_show(struct device *dev,
@@ -119,8 +119,8 @@ static ssize_t imanager_fwversion_show(struct device *dev,
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%d.%d\n",
-			 pdata->info.version.firmware_major,
-			 pdata->info.version.firmware_minor);
+			 pdata->info->version.firmware_major,
+			 pdata->info->version.firmware_minor);
 }
 
 static ssize_t imanager_type_show(struct device *dev,
@@ -129,7 +129,7 @@ static ssize_t imanager_type_show(struct device *dev,
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%s\n",
-			 imanager_project_code_str(&pdata->info.version));
+			 imanager_project_code_str(&pdata->info->version));
 }
 
 static DEVICE_ATTR(imanager_name, S_IRUGO, imanager_name_show, NULL);
@@ -221,7 +221,7 @@ static int imanager_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 	struct imanager_device_data *ec;
-	struct ec_info *info = &pdata->info;
+	const struct ec_info *info = pdata->info;
 	int ret;
 
 	if (!pdev)
@@ -242,7 +242,7 @@ static int imanager_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ec);
 
-	imanager_get_fw_info(info);
+	pdata->info = imanager_get_fw_info();
 
 	dev_info(dev, "Found Advantech iManager %s - %s %d.%d/%d.%d (%s)\n",
 		 ec->name, info->pcb_name,

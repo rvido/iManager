@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Core (EC IT8518/28) - Firmware Interface
+ * Advantech iManager Core - Firmware Interface
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -16,7 +16,8 @@
 #include <linux/byteorder/generic.h>
 #include <linux/module.h>
 #include <linux/swab.h>
-#include "ec.h"
+
+#include <ec.h>
 
 /**
  * This is the delay time between two EC transactions.
@@ -32,11 +33,15 @@
 #define EC_MSG_OFFSET_DATA(N)		(3UL + N)
 #define EC_MSG_OFFSET_PAYLOAD(N)	(7UL + N)
 
+/* The Device ID registers - 16 bit */
+#define DEVID_REG_MSB			0x20
+#define DEVID_REG_LSB			0x21
+
 /*
  * IT8528 based firmware require a read/write command offset.
  */
-#define EC_CMD_OFFSET_READ		0xA0
-#define EC_CMD_OFFSET_WRITE		0x50
+#define EC_CMD_OFFSET_READ		0xA0UL
+#define EC_CMD_OFFSET_WRITE		0x50UL
 
 #define EC_FLAG_IO_18			BIT(0)
 #define EC_FLAG_IO_28			BIT(1)
@@ -44,9 +49,12 @@
 #define EC_STATUS_SUCCESS		BIT(0)
 #define EC_STATUS_CMD_COMPLETE		BIT(7)
 
-#define PCB_NAME_READ_SIZE		8
+#define PCB_NAME_MAX_SIZE		8UL
 #define EC_I2C_BLOCK_SIZE		32
-#define EC_MAX_DID			32
+#define EC_MAX_DID			32UL
+
+#define DID_LABEL_SIZE			24UL
+#define DID_DESC_SIZE			32UL
 
 #define EC_KERNEL_MINOR(x)		(LOBYTE16(x))
 #define EC_KERNEL_MAJOR(x)	__extension__ ({	\
@@ -56,8 +64,6 @@
 #define EC_FIRMWARE_MINOR(x)		(LOBYTE16(x))
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(LOBYTE16(x)))
-
-#define DID_MAX_LABEL_SIZE		24
 
 enum ec_device_type {
 	ADC = 1,
@@ -71,23 +77,23 @@ enum ec_device_type {
 
 enum ec_device_id {
 	/* GPIO */
-	AltGPIO0	= 0x10,
-	AltGPIO1,
-	AltGPIO2,
-	AltGPIO3,
-	AltGPIO4,
-	AltGPIO5,
-	AltGPIO6,
-	AltGPIO7,
+	ALTGPIO0	= 0x10,
+	ALTGPIO1,
+	ALTGPIO2,
+	ALTGPIO3,
+	ALTGPIO4,
+	ALTGPIO5,
+	ALTGPIO6,
+	ALTGPIO7,
 	/* Button (GPIO) */
-	Btn0,
-	Btn1,
-	Btn2,
-	Btn3,
-	Btn4,
-	Btn5,
-	Btn6,
-	Btn7,
+	BUTTON0,
+	BUTTON1,
+	BUTTON2,
+	BUTTON3,
+	BUTTON4,
+	BUTTON5,
+	BUTTON6,
+	BUTTON7,
 	/* FAN */
 	CPUFAN_2P,
 	CPUFAN_4P,
@@ -96,9 +102,9 @@ enum ec_device_id {
 	SYSFAN2_2P,
 	SYSFAN2_4P,
 	/* Brightness Control */
-	PWMBRIGHTNESS,
+	BRIGHTNESS,
 	/* System Speaker */
-	PWMBEEP,
+	PCBEEP,
 	/* SMBus */
 	SMBOEM0,
 	SMBOEM1,
@@ -106,10 +112,10 @@ enum ec_device_id {
 	SMBEEPROM,
 	SMBTHERMAL0,
 	SMBTHERMAL1,
-	SMBSecurityEEP,
+	SMBSECEEP,
 	I2COEM,
 	/* Speaker */
-	DACSPEAKER	= 0x30,
+	SPEAKER		= 0x30,
 	/* SMBus */
 	SMBEEP2K	= 0x38,
 	OEMEEP,
@@ -119,22 +125,22 @@ enum ec_device_id {
 	SMLINK,
 	SMBSLV,
 	/* LED */
-	PowerLED	= 0x40,
-	BatLEDG,
+	POWERLED	= 0x40,
+	BATLEDG,
 	OEMLED0,
 	OEMLED1,
 	OEMLED2,
-	BatLEDR,
+	BATLEDR,
 	/* Smart Battery */
-	SmartBat1	= 0x48,
-	SmartBat2,
+	SMARTBAT1	= 0x48,
+	SMARTBAT2,
 	/* ADC */
-	ADCCMOSBAT	= 0x50,
-	ADCCMOSBATx2,
-	ADCCMOSBATx10,
-	ADCBAT,
-	ADCBATx2,
-	ADCBATx10,
+	CMOSBAT		= 0x50,
+	CMOSBATx2,
+	CMOSBATx10,
+	LIBAT,
+	LIBATx2,
+	LIBATx10,
 	ADC5VS0,
 	ADC5VS0x2,
 	ADC5VS0x10,
@@ -150,22 +156,22 @@ enum ec_device_id {
 	ADC12VS0,
 	ADC12VS0x2,
 	ADC12VS0x10,
-	ADCVCOREA,
-	ADCVCOREAx2,
-	ADCVCOREAx10,
-	ADCVCOREB,
-	ADCVCOREBx2,
-	ADCVCOREBx10,
+	VCOREA,
+	VCOREAx2,
+	VCOREAx10,
+	VCOREB,
+	VCOREBx2,
+	VCOREBx10,
 	ADCDC,
 	ADCDCx2,
 	ADCDCx10,
-	ADCDCSTBY,
-	ADCDCSTBYx2,
-	ADCDCSTBYx10,	/* 0x70 */
-	ADCDCOther,
-	ADCDCOtherx2,
-	ADCDCOtherx10,
-	ADCCurrent,
+	VSTBY,
+	VSTBYx2,
+	VSTBYx10,	/* 0x70 */
+	VAUX,
+	VAUXx2,
+	VAUXx10,
+	CURRENT,
 	/* Watchdog */
 	WDIRQ		= 0x78,
 	WDNMI,
@@ -174,35 +180,46 @@ enum ec_device_id {
 	TACHO1,
 	TACHO2,
 	/* Brightness/Backlight Control */
-	PWMBRIGHTNESS2	= 0x88,
+	BRIGHTNESS2	= 0x88,
 	BACKLIGHT1,
 	BACKLIGHT2
 };
 
-struct ec_device_table {
-	enum ec_device_id	id;
-	enum ec_device_type	type;
-	char			label[DID_MAX_LABEL_SIZE];
+enum ec_dynamic_table_type {
+	EC_DYN_DID,
+	EC_DYN_HWP,
+	EC_DYN_POL
 };
 
-struct ec_device_attr {
-	u8 did;			/* Device ID */
-	u8 hwp;			/* Hardware Pin */
-	u8 pol;			/* Polarity */
+struct ec_devtbl {
+	int id;
+	int type;
+	int scale;
+	const char label[DID_LABEL_SIZE];
+	const char description[DID_DESC_SIZE];
 };
 
-struct ec_dev_cfg {
-	struct ec_device_attr	attr;
-	enum ec_device_type	type;
-	const char		*label;
-	const char		*desc;
+struct ec_dyn_devtbl {
+	int did;	/* Device ID */
+	int hwp;	/* Hardware Pin */
+	int pol;	/* Polarity */
+	const struct ec_devtbl *devtbl; /* Device table Entry */
 };
 
 struct ec_data {
-	u32			ioflag;
-	u32			chipid;
-	u16			addr;
-	struct ec_dev_cfg	cfg[EC_MAX_DID];
+	int	ioflag;
+	int	chipid;
+	u16	addr;
+
+	struct ec_dyn_devtbl dyn[EC_MAX_DID];
+
+	struct ec_info	info;
+
+	struct imanager_hwmon_device		sensors;
+	struct imanager_gpio_device		gpio;
+	struct imanager_smbus_device		smb;
+	struct imanager_watchdog_device		wdt;
+	struct imanager_backlight_device	blc;
 };
 
 struct ec_version_raw {
@@ -212,387 +229,115 @@ struct ec_version_raw {
 		firmware;
 };
 
+enum ec_ram_type {
+	EC_RAM_ACPI = 1,
+	EC_RAM_HW,
+	EC_RAM_EXT
+};
+
 static struct ec_data ec;
 
-static const struct ec_device_table devtbl[] = {
-	{
-		.id = AltGPIO0,
-		.type = GPIO,
-		.label = "gpio0",
-	}, {
-		.id = AltGPIO1,
-		.type = GPIO,
-		.label = "gpio1",
-	}, {
-		.id = AltGPIO2,
-		.type = GPIO,
-		.label = "gpio2",
-	}, {
-		.id = AltGPIO3,
-		.type = GPIO,
-		.label = "gpio3",
-	}, {
-		.id = AltGPIO4,
-		.type = GPIO,
-		.label = "gpio4",
-	}, {
-		.id = AltGPIO5,
-		.type = GPIO,
-		.label = "gpio5",
-	}, {
-		.id = AltGPIO6,
-		.type = GPIO,
-		.label = "gpio6",
-	}, {
-		.id = AltGPIO7,
-		.type = GPIO,
-		.label = "gpio7",
-	}, {
-		.id = Btn0,
-		.type = GPIO,
-		.label = "button0",
-	}, {
-		.id = Btn1,
-		.type = GPIO,
-		.label = "button1",
-	}, {
-		.id = Btn2,
-		.type = GPIO,
-		.label = "button2",
-	}, {
-		.id = Btn3,
-		.type = GPIO,
-		.label = "button3",
-	}, {
-		.id = Btn4,
-		.type = GPIO,
-		.label = "button4",
-	}, {
-		.id = Btn5,
-		.type = GPIO,
-		.label = "button5",
-	}, {
-		.id = Btn6,
-		.type = GPIO,
-		.label = "button6",
-	}, {
-		.id = Btn7,
-		.type = GPIO,
-		.label = "button7",
-	}, {
-		.id = CPUFAN_2P,
-		.type = PWM,
-		.label = "FAN CPU",
-	}, {
-		.id = CPUFAN_4P,
-		.type = PWM,
-		.label = "FAN CPU",
-	}, {
-		.id = SYSFAN1_2P,
-		.type = PWM,
-		.label = "FAN SYS1",
-	}, {
-		.id = SYSFAN1_4P,
-		.type = PWM,
-		.label = "FAN SYS1",
-	}, {
-		.id = SYSFAN2_2P,
-		.type = PWM,
-		.label = "FAN SYS2",
-	}, {
-		.id = SYSFAN2_4P,
-		.type = PWM,
-		.label = "FAN SYS2",
-	}, {
-		.id = PWMBRIGHTNESS,
-		.type = PWM,
-		.label = "Brightness1",
-	}, {
-		.id = PWMBEEP,
-		.type = PWM,
-		.label = "Beep",
-	}, {
-		.id = SMBOEM0,
-		.type = SMB,
-		.label = "smb1",
-	}, {
-		.id = SMBOEM1,
-		.type = SMB,
-		.label = "smb2",
-	}, {
-		.id = SMBOEM2,
-		.type = SMB,
-		.label = "smb3",
-	}, {
-		.id = SMBEEPROM,
-		.type = SMB,
-		.label = "SMBEEP",
-	}, {
-		.id = SMBTHERMAL0,
-		.type = SMB,
-		.label = "SMBThermal0",
-	}, {
-		.id = SMBTHERMAL1,
-		.type = SMB,
-		.label = "SMBThermal1",
-	}, {
-		.id = SMBSecurityEEP,
-		.type = SMB,
-		.label = "SMBSecurityEEP",
-	}, {
-		.id = I2COEM,
-		.type = SMB,
-		.label = "i2c",
-	}, {
-		.id = DACSPEAKER,
-		.type = DAC,
-		.label = "Speaker",
-	}, {
-		.id = SMBEEP2K,
-		.type = SMB,
-		.label = "SMBEEP2K",
-	}, {
-		.id = OEMEEP,
-		.label = "OEMEEP",
-		.type = SMB,
-	}, {
-		.id = OEMEEP2K,
-		.type = SMB,
-		.label = "OEMEEP2K",
-	}, {
-		.id = PECI,
-		.type = SMB,
-		.label = "SMB_PECI",
-	}, {
-		.id = SMBOEM3,
-		.type = SMB,
-		.label = "SMBOEM3",
-	}, {
-		.id = SMLINK,
-		.type = SMB,
-		.label = "SMLINK",
-	}, {
-		.id = SMBSLV,
-		.type = SMB,
-		.label = "SMBSLV",
-	}, {
-		.id = PowerLED,
-		.type = GPIO,
-		.label = "Power LED",
-	}, {
-		.id = BatLEDG,
-		.type = GPIO,
-		.label = "Bat_LED_Green",
-	}, {
-		.id = OEMLED0,
-		.type = GPIO,
-		.label = "LED1",
-	}, {
-		.id = OEMLED1,
-		.type = GPIO,
-		.label = "LED2",
-	}, {
-		.id = OEMLED2,
-		.type = GPIO,
-		.label = "LED3",
-	}, {
-		.id = BatLEDR,
-		.type = GPIO,
-		.label = "Bat_LED_Red",
-	}, {
-		.id = SmartBat1,
-		.type = SMB,
-		.label = "SmartBat1",
-	}, {
-		.id = SmartBat2,
-		.type = SMB,
-		.label = "SmartBat2",
-	}, {
-		.id = ADCCMOSBAT,
-		.type = ADC,
-		.label = "VBat",
-	}, {
-		.id = ADCCMOSBATx2,
-		.type = ADC,
-		.label = "VBat",
-	}, {
-		.id = ADCCMOSBATx10,
-		.type = ADC,
-		.label = "VBat",
-	}, {
-		.id = ADCBAT,
-		.type = ADC,
-		.label = "VBat2",
-	}, {
-		.id = ADCBATx2,
-		.type = ADC,
-		.label = "VBat2",
-	}, {
-		.id = ADCBATx10,
-		.type = ADC,
-		.label = "VBat2",
-	}, {
-		.id = ADC5VS0,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC5VS0x2,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC5VS0x10,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC5VS5,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC5VS5x2,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC5VS5x10,
-		.type = ADC,
-		.label = "+5V",
-	}, {
-		.id = ADC33VS0,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC33VS0x2,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC33VS0x10,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC33VS5,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC33VS5x2,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC33VS5x10,
-		.type = ADC,
-		.label = "+3.3V",
-	}, {
-		.id = ADC12VS0,
-		.type = ADC,
-		.label = "+12V",
-	}, {
-		.id = ADC12VS0x2,
-		.type = ADC,
-		.label = "+12V",
-	}, {
-		.id = ADC12VS0x10,
-		.type = ADC,
-		.label = "+12V",
-	}, {
-		.id = ADCVCOREA,
-		.type = ADC,
-		.label = "VCore",
-	}, {
-		.id = ADCVCOREAx2,
-		.type = ADC,
-		.label = "VCore",
-	}, {
-		.id = ADCVCOREAx10,
-		.type = ADC,
-		.label = "VCore",
-	}, {
-		.id = ADCVCOREB,
-		.type = ADC,
-		.label = "VCore2",
-	}, {
-		.id = ADCVCOREBx2,
-		.type = ADC,
-		.label = "VCore2",
-	}, {
-		.id = ADCVCOREBx10,
-		.type = ADC,
-		.label = "VCore2",
-	}, {
-		.id = ADCDC,
-		.type = ADC,
-		.label = "ADCDC",
-	}, {
-		.id = ADCDCx2,
-		.type = ADC,
-		.label = "ADCDCx2",
-	}, {
-		.id = ADCDCx10,
-		.type = ADC,
-		.label = "ADCDCx10",
-	}, {
-		.id = ADCDCSTBY,
-		.type = ADC,
-		.label = "Vsb",
-	}, {
-		.id = ADCDCSTBYx2,
-		.type = ADC,
-		.label = "Vsb",
-	}, {
-		.id = ADCDCSTBYx10,
-		.type = ADC,
-		.label = "Vsb",
-	}, {
-		.id = ADCDCOther,
-		.type = ADC,
-		.label = "ADCDCOther",
-	}, {
-		.id = ADCDCOtherx2,
-		.type = ADC,
-		.label = "ADCDCOtherx2",
-	}, {
-		.id = ADCDCOtherx10,
-		.type = ADC,
-		.label = "ADCDCOtherx10",
-	}, {
-		.id = ADCCurrent,
-		.type = ADC,
-		.label = "Imon",
-	}, {
-		.id = WDIRQ,
-		.type = IRQ,
-		.label = "WDIRQ",
-	}, {
-		.id = WDNMI,
-		.type = GPIO,
-		.label = "WDNMI",
-	}, {
-		.id = TACHO0,
-		.type = TACH,
-		.label = "Tacho1",
-	}, {
-		.id = TACHO1,
-		.type = TACH,
-		.label = "Tacho2",
-	}, {
-		.id = TACHO2,
-		.type = TACH,
-		.label = "Tacho3",
-	}, {
-		.id = PWMBRIGHTNESS2,
-		.type = PWM,
-		.label = "Brightness2",
-	}, {
-		.id = BACKLIGHT1,
-		.type = GPIO,
-		.label = "Backlight1",
-	}, {
-		.id = BACKLIGHT2,
-		.type = GPIO,
-		.label = "Backlight2",
-	},
+static const struct ec_devtbl devtbl[] = {
+	{ ALTGPIO0,	GPIO,	-1,	"gpio0" },
+	{ ALTGPIO1,	GPIO,	-1,	"gpio1" },
+	{ ALTGPIO2,	GPIO,	-1,	"gpio2" },
+	{ ALTGPIO3,	GPIO,	-1,	"gpio3" },
+	{ ALTGPIO4,	GPIO,	-1,	"gpio4" },
+	{ ALTGPIO5,	GPIO,	-1,	"gpio5" },
+	{ ALTGPIO6,	GPIO,	-1,	"gpio6" },
+	{ ALTGPIO7,	GPIO,	-1,	"gpio7" },
+	{ BUTTON0,	GPIO,	-1,	"button0" },
+	{ BUTTON1,	GPIO,	-1,	"button1" },
+	{ BUTTON2,	GPIO,	-1,	"button2" },
+	{ BUTTON3,	GPIO,	-1,	"button3" },
+	{ BUTTON4,	GPIO,	-1,	"button4" },
+	{ BUTTON5,	GPIO,	-1,	"button4" },
+	{ BUTTON6,	GPIO,	-1,	"button4" },
+	{ BUTTON7,	GPIO,	-1,	"button4" },
+	{ CPUFAN_2P,	PWM,	2,	"FAN CPU" },
+	{ CPUFAN_4P,	PWM,	4,	"FAN CPU" },
+	{ SYSFAN1_2P,	PWM,	2,	"FAN SYS1" },
+	{ SYSFAN1_4P,	PWM,	4,	"FAN SYS1" },
+	{ SYSFAN2_2P,	PWM,	2,	"FAN SYS2" },
+	{ SYSFAN2_4P,	PWM,	4,	"FAN SYS2" },
+	{ BRIGHTNESS,	PWM,	-1,	"Brightness1" },
+	{ PCBEEP,	PWM,	-1,	"Beep" },
+	{ SMBOEM0,	SMB,	-1,	"SMB1" },
+	{ SMBOEM1,	SMB,	-1,	"SMB2" },
+	{ SMBOEM2,	SMB,	-1,	"SMB3" },
+	{ SMBEEPROM,	SMB,	-1,	"SMBEEP" },
+	{ SMBTHERMAL0,	SMB,	-1,	"SMBTHERM0" },
+	{ SMBTHERMAL1,	SMB,	-1,	"SMBTHERM1" },
+	{ SMBSECEEP,	SMB,	-1,	"SMBSECEEP" },
+	{ I2COEM,	SMB,	-1,	"I2COEM" },
+	{ SPEAKER,	DAC,	-1,	"Speaker" },
+	{ SMBEEP2K,	SMB,	-1,	"SMBEEP2K" },
+	{ OEMEEP,	SMB,	-1,	"OEMEEP" },
+	{ OEMEEP2K,	SMB,	-1,	"OEMEEP2K" },
+	{ PECI,		SMB,	-1,	"SMB_PECI" },
+	{ SMBOEM3,	SMB,	-1,	"SMBOEM3" },
+	{ SMLINK,	SMB,	-1,	"SMLINK" },
+	{ SMBSLV,	SMB,	-1,	"SMBSLV" },
+	{ POWERLED,	GPIO,	-1,	"Power LED" },
+	{ BATLEDG,	GPIO,	-1,	"BATLEDG" },
+	{ OEMLED0,	GPIO,	-1,	"OEMLED0" },
+	{ OEMLED1,	GPIO,	-1,	"OEMLED1" },
+	{ OEMLED2,	GPIO,	-1,	"OEMLED2" },
+	{ BATLEDR,	GPIO,	-1,	"OEMLEDR" },
+	{ SMARTBAT1,	SMB,	-1,	"SmartBat1" },
+	{ SMARTBAT2,	SMB,	-1,	"SmartBat2" },
+	{ CMOSBAT,	ADC,	1,	"VBat" },
+	{ CMOSBATx2,	ADC,	2,	"VBat" },
+	{ CMOSBATx10,	ADC,	10,	"VBat" },
+	{ LIBAT,	ADC,	1,	"VBat2" },
+	{ LIBATx2,	ADC,	2,	"VBat2" },
+	{ LIBATx10,	ADC,	10,	"VBat2" },
+	{ ADC5VS0,	ADC,	1,	"+5V" },
+	{ ADC5VS0x2,	ADC,	2,	"+5V" },
+	{ ADC5VS0x10,	ADC,	10,	"+5V" },
+	{ ADC5VS5,	ADC,	1,	"+5V" },
+	{ ADC5VS5x2,	ADC,	2,	"+5V" },
+	{ ADC5VS5x10,	ADC,	10,	"+5V" },
+	{ ADC33VS0,	ADC,	1,	"+3.3V" },
+	{ ADC33VS0x2,	ADC,	2,	"+3.3V" },
+	{ ADC33VS0x10,	ADC,	10,	"+3.3V" },
+	{ ADC33VS5,	ADC,	1,	"+3.3V" },
+	{ ADC33VS5x2,	ADC,	2,	"+3.3V" },
+	{ ADC33VS5x10,	ADC,	10,	"+3.3V" },
+	{ ADC12VS0,	ADC,	1,	"+12V" },
+	{ ADC12VS0x2,	ADC,	2,	"+12V" },
+	{ ADC12VS0x10,	ADC,	10,	"+12V" },
+	{ VCOREA,	ADC,	1,	"VCore" },
+	{ VCOREAx2,	ADC,	2,	"VCore" },
+	{ VCOREAx10,	ADC,	10,	"VCore" },
+	{ VCOREB,	ADC,	1,	"VCore2" },
+	{ VCOREBx2,	ADC,	2,	"VCore2" },
+	{ VCOREBx10,	ADC,	10,	"VCore2" },
+	{ ADCDC,	ADC,	1,	"ADCDC" },
+	{ ADCDCx2,	ADC,	2,	"ADCDCx2" },
+	{ ADCDCx10,	ADC,	10,	"ADCDCx10" },
+	{ VSTBY,	ADC,	1,	"Vsb" },
+	{ VSTBYx2,	ADC,	2,	"Vsb" },
+	{ VSTBYx10,	ADC,	10,	"Vsb" },
+	{ VAUX,		ADC,	1,	"VAUX" },
+	{ VAUXx2,	ADC,	2,	"VAUX" },
+	{ VAUXx10,	ADC,	10,	"VAUX" },
+	{ CURRENT,	ADC,	1,	"Imon" },
+	{ WDIRQ,	IRQ,	-1,	"WDIRQ" },
+	{ WDNMI,	GPIO,	-1,	"WDNMI" },
+	{ TACHO0,	TACH,	-1,	"Tacho1" },
+	{ TACHO1,	TACH,	-1,	"Tacho2" },
+	{ TACHO2,	TACH,	-1,	"Tacho3" },
+	{ BRIGHTNESS2,	PWM,	-1,	"Brightness2" },
+	{ BACKLIGHT1,	GPIO,	-1,	"Backlight1" },
+	{ BACKLIGHT2,	GPIO,	-1,	"Backlight2" },
+	{ 0, 0, 0, "" }
 };
 
 /**
  * EC I/O
  */
+
 static inline void imanager_delay(void)
 {
 	udelay(EC_MICRO_DELAY);
@@ -675,7 +420,7 @@ static inline int _ec_outb(int addr, int reg, int val)
 	return 0;
 }
 
-static int _ec_read(u8 cmd)
+static int ec_read(u8 cmd)
 {
 	int ret;
 
@@ -689,7 +434,7 @@ static int _ec_read(u8 cmd)
 	return ret;
 }
 
-static int _ec_write(u8 cmd, u8 value)
+static int ec_write(u8 cmd, u8 value)
 {
 	int ret = 0;
 
@@ -713,7 +458,8 @@ static void ec_clear_ports(void)
 
 static inline u16 ec_read_chipid(u16 addr)
 {
-	return ((ec_inb(addr, 0x20) << 8) | ec_inb(addr, 0x21));
+	return ((ec_inb(addr, DEVID_REG_MSB) << 8) | \
+		 ec_inb(addr, DEVID_REG_LSB));
 }
 
 static int ec_wait_cmd_clear(void)
@@ -721,7 +467,7 @@ static int ec_wait_cmd_clear(void)
 	int i = 0;
 
 	do {
-		if (!_ec_read(0))
+		if (!ec_read(0))
 			return 0;
 		imanager_delay();
 	} while (i++ < EC_MAX_RETRY);
@@ -743,21 +489,21 @@ static int ec_read_ram(u8 bank, u8 offset, u8 len, u8 *buf, u8 bufsz)
 	if (ret)
 		return ret;
 
-	_ec_write(EC_MSG_OFFSET_PARAM, bank);
-	_ec_write(EC_MSG_OFFSET_DATA(0), offset);
-	_ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
-	_ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
+	ec_write(EC_MSG_OFFSET_PARAM, bank);
+	ec_write(EC_MSG_OFFSET_DATA(0), offset);
+	ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
+	ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
 
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
-	ret = _ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec_read(EC_MSG_OFFSET_STATUS);
 	if (ret != EC_STATUS_SUCCESS)
 		return -EIO;
 
 	for (i = 0; (i < len) && (len < EC_MSG_SIZE) && (len <= bufsz); i++)
-		buf[i] = _ec_read(EC_MSG_OFFSET_DATA(i + 1));
+		buf[i] = ec_read(EC_MSG_OFFSET_DATA(i + 1));
 
 	return 0;
 }
@@ -774,29 +520,29 @@ static int ec_write_ram(u8 bank, u8 offset, u8 len, u8 *buf)
 	if (ret)
 		return ret;
 
-	_ec_write(EC_MSG_OFFSET_PARAM, bank);
-	_ec_write(EC_MSG_OFFSET_DATA(0), offset);
-	_ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
+	ec_write(EC_MSG_OFFSET_PARAM, bank);
+	ec_write(EC_MSG_OFFSET_DATA(0), offset);
+	ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
 
 	for (i = 0; (i < len) && (len < EC_MSG_SIZE); i++)
-		_ec_write(EC_MSG_OFFSET_DATA(i + 1), buf[i]);
+		ec_write(EC_MSG_OFFSET_DATA(i + 1), buf[i]);
 
-	_ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
+	ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
 
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
-	ret = _ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec_read(EC_MSG_OFFSET_STATUS);
 	if (ret != EC_STATUS_SUCCESS)
 		return -EIO;
 
 	return 0;
 }
 
-static int ec_read_dynamic_devtbl(void)
+static int ec_read_dynamic_devtbl(struct ec_data *ec)
 {
-	size_t i, j;
+	u32 i, j;
 	int ret;
 	struct ec_message did = {
 		.rlen = EC_MAX_DID,
@@ -810,31 +556,30 @@ static int ec_read_dynamic_devtbl(void)
 		.rlen = EC_MAX_DID,
 		.wlen = 0,
 	};
+	struct ec_dyn_devtbl *dyn;
 
-	memset(ec.cfg, 0, sizeof(ec.cfg));
+	memset(ec->dyn, 0, sizeof(ec->dyn));
 
-	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, 0x00, &did);
+	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, EC_DYN_DID, &did);
 	if (ret)
 		return -EIO;
 
-	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, 0x01, &hwp);
+	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, EC_DYN_HWP, &hwp);
 	if (ret)
 		return -EIO;
 
-	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, 0x02, &pol);
+	ret = imanager_msg_read(EC_CMD_DYN_TBL_RD, EC_DYN_POL, &pol);
 	if (ret)
 		return -EIO;
 
-	for (i = 0; i < EC_MAX_DID; i++) {
-		if (!did.u.data[i])
-			break;
+	for (i = 0; (i < EC_MAX_DID) && did.u.data[i]; i++) {
+		dyn = &ec->dyn[i];
 		for (j = 0; j < ARRAY_SIZE(devtbl); j++) {
 			if (devtbl[j].id == did.u.data[i]) {
-				ec.cfg[i].type = devtbl[j].type;
-				ec.cfg[i].label = devtbl[j].label;
-				ec.cfg[i].attr.did = did.u.data[i];
-				ec.cfg[i].attr.hwp = hwp.u.data[i];
-				ec.cfg[i].attr.pol = pol.u.data[i];
+				dyn->did = did.u.data[i];
+				dyn->hwp = hwp.u.data[i];
+				dyn->pol = pol.u.data[i];
+				dyn->devtbl = &devtbl[j];
 				break;
 			}
 		}
@@ -843,82 +588,11 @@ static int ec_read_dynamic_devtbl(void)
 	return 0;
 }
 
-static int ec_init(void)
-{
-	int ret;
-
-	ec_clear_ports();
-
-	ret = ec_read_dynamic_devtbl();
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
-static int ec_get_version(struct ec_version *version)
-{
-	int ret;
-	u16 raw;
-	struct ec_version_raw ver;
-
-	if (WARN_ON(!version))
-		return -EINVAL;
-
-	ret = ec_read_ram(ACPI, EC_ACPIRAM_FW_RELEASE_RD, sizeof(ver),
-			 (u8 *)&ver, sizeof(ver));
-	if (ret < 0)
-		return ret;
-
-	raw = swab16(ver.kernel);
-	version->kernel_major = EC_KERNEL_MAJOR(raw);
-	version->kernel_minor = EC_KERNEL_MINOR(raw);
-
-	raw = swab16(ver.firmware);
-	version->firmware_major = EC_FIRMWARE_MAJOR(raw);
-	version->firmware_minor = EC_FIRMWARE_MINOR(raw);
-
-	raw = swab16(ver.project_code);
-	version->type = EC_PROJECT_CODE(raw);
-
-	return 0;
-}
-
-static int ec_get_pcb_name(struct ec_info *info)
-{
-	int ret;
-	struct ec_message msg = {
-		.rlen = ARRAY_SIZE(info->pcb_name),
-		.wlen = 0,
-	};
-
-	if (WARN_ON(!info))
-		return -EINVAL;
-
-	ret = imanager_msg_read(EC_CMD_FW_INFO_RD, 0, &msg);
-	if (ret)
-		return ret;
-
-	/*
-	 * Sadly, the string is not Null-terminated so we will need to read a
-	 * fixed amount of chars. There is, apparently, no exact definition
-	 * of board name (SOM6867 vs. MIO-5271).
-	 */
-	memset(info->pcb_name, 0, ARRAY_SIZE(info->pcb_name));
-	strncpy(info->pcb_name, (const char *)msg.u.data, PCB_NAME_READ_SIZE);
-
-	if (strchr(info->pcb_name, '-') == NULL)
-		info->pcb_name[PCB_NAME_READ_SIZE - 1] = '\0';
-
-	return 0;
-}
-
 static int ec_read_buffer(u8 *data, int rlen)
 {
-	int i, j;
-	int ret;
+	int ret, i, j;
 	int pages = rlen % EC_I2C_BLOCK_SIZE;
-	int reminder = rlen / EC_I2C_BLOCK_SIZE;
+	int remainder = rlen / EC_I2C_BLOCK_SIZE;
 
 	/* pre-condition: rlen <= 256 */
 
@@ -927,56 +601,41 @@ static int ec_read_buffer(u8 *data, int rlen)
 		return ret;
 
 	for (i = 0; i < pages; i++) {
-		_ec_write(EC_MSG_OFFSET_PARAM, i);
-		_ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
+		ec_write(EC_MSG_OFFSET_PARAM, i);
+		ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
 
 		ret = ec_wait_cmd_clear();
 		if (ret)
 			return ret;
 
-		ret = _ec_read(EC_MSG_OFFSET_STATUS);
+		ret = ec_read(EC_MSG_OFFSET_STATUS);
 		if (ret != EC_STATUS_SUCCESS)
 			return -EIO;
 
 		for (j = 0; j < EC_I2C_BLOCK_SIZE; j++)
 			data[i * EC_I2C_BLOCK_SIZE + j] =
-				_ec_read(EC_MSG_OFFSET_DATA(j));
+				ec_read(EC_MSG_OFFSET_DATA(j));
 	}
 
-	if (reminder) {
-		_ec_write(EC_MSG_OFFSET_PARAM, pages);
-		_ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
+	if (remainder) {
+		ec_write(EC_MSG_OFFSET_PARAM, pages);
+		ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
 
 		ret = ec_wait_cmd_clear();
 		if (ret)
 			return ret;
 
-		ret = _ec_read(EC_MSG_OFFSET_STATUS);
+		ret = ec_read(EC_MSG_OFFSET_STATUS);
 		if (ret != EC_STATUS_SUCCESS)
 			return -EIO;
 
-		for (j = 0; j < reminder; j++)
+		for (j = 0; j < remainder; j++)
 			data[pages * EC_I2C_BLOCK_SIZE + j] =
-				_ec_read(EC_MSG_OFFSET_DATA(j));
+				ec_read(EC_MSG_OFFSET_DATA(j));
 	}
 
 	return 0;
 }
-
-int imanager_get_fw_info(struct ec_info *info)
-{
-	int ret;
-
-	if (WARN_ON(!info))
-		return -EINVAL;
-
-	ret = ec_get_version(&info->version);
-	if (ret)
-		return ret;
-
-	return ec_get_pcb_name(info);
-}
-EXPORT_SYMBOL_GPL(imanager_get_fw_info);
 
 static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool payload)
 {
@@ -987,27 +646,27 @@ static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool pay
 	if (ret)
 		return ret;
 
-	_ec_write(EC_MSG_OFFSET_PARAM, param);
+	ec_write(EC_MSG_OFFSET_PARAM, param);
 
 	if (msg && msg->wlen) {
 		if (!msg->data) {
 			for (i = 0; i < msg->wlen; i++)
-				_ec_write(EC_MSG_OFFSET_DATA(i),
+				ec_write(EC_MSG_OFFSET_DATA(i),
 					msg->u.data[i]);
 		} else {
 			for (i = 0; i < msg->wlen; i++)
-				_ec_write(EC_MSG_OFFSET_DATA(i), msg->data[i]);
-			_ec_write(EC_MSG_OFFSET_DATA(0x2c), msg->wlen);
+				ec_write(EC_MSG_OFFSET_DATA(i), msg->data[i]);
+			ec_write(EC_MSG_OFFSET_DATA(0x2c), msg->wlen);
 		}
 	}
 
-	_ec_write(EC_MSG_OFFSET_CMD, cmd);
+	ec_write(EC_MSG_OFFSET_CMD, cmd);
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
 	/* GPIO and I2C have different success return values */
-	ret = _ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec_read(EC_MSG_OFFSET_STATUS);
 	if ((ret != EC_STATUS_SUCCESS) && !(ret & EC_STATUS_CMD_COMPLETE))
 		return -EIO;
 	/*
@@ -1023,17 +682,25 @@ static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool pay
 			return ret;
 	} else if (msg && msg->rlen) {
 		if (msg->rlen == 0xff)
-			len = _ec_read(EC_MSG_OFFSET_DATA(0x2C));
+			/* Use alternate message body for hwmon */
+			len = ec_read(EC_MSG_OFFSET_DATA(0x2C));
 		else
 			len = (msg->rlen > EC_MSG_SIZE ? EC_MSG_SIZE :
 				msg->rlen);
-		offset = payload ? EC_MSG_OFFSET_PAYLOAD(0) : EC_MSG_OFFSET_DATA(0);
+		offset = payload ? EC_MSG_OFFSET_PAYLOAD(0) :
+				EC_MSG_OFFSET_DATA(0);
 		for (i = 0; i < len; i++)
-			msg->u.data[i] = _ec_read(offset + i);
+			msg->u.data[i] = ec_read(offset + i);
 	}
 
 	return 0;
 }
+
+const struct ec_info *imanager_get_fw_info(void)
+{
+	return &ec.info;
+}
+EXPORT_SYMBOL_GPL(imanager_get_fw_info);
 
 int imanager_msg_read(u8 cmd, u8 param, struct ec_message *msg)
 {
@@ -1085,7 +752,7 @@ int imanager_write_byte(u8 cmd, u8 param, u8 byte)
 		.rlen = 0,
 		.wlen = 1,
 		.u = {
-			.data = {byte, 0},
+			.data = { byte, 0 },
 		},
 	};
 
@@ -1099,7 +766,7 @@ int imanager_write_word(u8 cmd, u8 param, u16 word)
 		.rlen = 0,
 		.wlen = 2,
 		.u = {
-			.data = {HIBYTE16(word), LOBYTE16(word), 0},
+			.data = { HIBYTE16(word), LOBYTE16(word), 0 },
 		},
 	};
 
@@ -1112,7 +779,7 @@ static int ec_hwram_read_byte(u8 offset)
 	int ret;
 	u8 val;
 
-	ret = ec_read_ram(HW, offset, sizeof(val), &val, sizeof(val));
+	ret = ec_read_ram(EC_RAM_HW, offset, sizeof(val), &val, sizeof(val));
 	if (ret < 0) {
 		pr_err("Failed to read from HWRAM @ 0x%02X\n", offset);
 		return ret;
@@ -1126,7 +793,7 @@ int imanager_acpiram_read_byte(u8 offset)
 	int ret;
 	u8 value;
 
-	ret = ec_read_ram(ACPI, offset, sizeof(value), (u8 *)&value,
+	ret = ec_read_ram(EC_RAM_ACPI, offset, sizeof(value), (u8 *)&value,
 			  sizeof(value));
 	if (ret < 0) {
 		pr_err("Failed to read from ACPI RAM @ 0x%02X\n", offset);
@@ -1141,7 +808,7 @@ int imanager_acpiram_write_byte(u8 offset, u8 value)
 {
 	int ret;
 
-	ret = ec_write_ram(ACPI, offset, sizeof(value), &value);
+	ret = ec_write_ram(EC_RAM_ACPI, offset, sizeof(value), &value);
 	if (ret) {
 		pr_err("Failed to write to ACPI RAM @ 0x%02X\n", offset);
 		return ret;
@@ -1155,7 +822,7 @@ int imanager_acpiram_read_block(u8 offset, u8 *buf, u8 len)
 {
 	int ret;
 
-	ret = ec_read_ram(ACPI, offset, len, buf, len);
+	ret = ec_read_ram(EC_RAM_ACPI, offset, len, buf, len);
 	if (ret < 0) {
 		pr_err("Failed to read from ACPI RAM @ 0x%02X\n", offset);
 		return ret;
@@ -1169,7 +836,7 @@ int imanager_acpiram_write_block(u8 offset, u8 *buf, u8 len)
 {
 	int ret;
 
-	ret = ec_write_ram(ACPI, offset, len, buf);
+	ret = ec_write_ram(EC_RAM_ACPI, offset, len, buf);
 	if (ret) {
 		pr_err("Failed to write to ACPI RAM @ 0x%02X\n", offset);
 		return ret;
@@ -1198,106 +865,60 @@ int imanager_wait_proc_complete(u8 offset, int cond)
 }
 EXPORT_SYMBOL_GPL(imanager_wait_proc_complete);
 
-int imanager_get_adc_cfg(struct adc_cfg *adc)
+static inline void ec_get_dev_attr(struct ec_dev_attr *attr,
+				   const struct ec_dyn_devtbl *tbl)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	attr->did = tbl->did;
+	attr->hwp = tbl->hwp;
+	attr->pol = tbl->pol;
+	attr->scale = tbl->devtbl->scale;
+	attr->label = tbl->devtbl->label;
+}
 
-	if (WARN_ON(!adc))
-		return -EINVAL;
+static int ec_get_dev_adc(struct ec_data *ec)
+{
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct dev_adc *adc = &ec->sensors.adc;
 
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == ADC) {
-			switch (cfg->attr.did) {
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == ADC)) {
+			switch (dyn->did) {
 			case ADC12VS0:
-				adc[0].did = cfg->attr.did;
-				adc[0].scale = 1;
-				adc[0].label = cfg->label;
-				break;
 			case ADC12VS0x2:
-				adc[0].did = cfg->attr.did;
-				adc[0].scale = 2;
-				adc[0].label = cfg->label;
-				break;
 			case ADC12VS0x10:
-				adc[0].did = cfg->attr.did;
-				adc[0].scale = 10;
-				adc[0].label = cfg->label;
+				ec_get_dev_attr(&adc->attr[0], dyn);
+				adc->num++;
 				break;
 			case ADC5VS5:
-				adc[1].did = cfg->attr.did;
-				adc[1].scale = 1;
-				adc[1].label = cfg->label;
-				break;
 			case ADC5VS5x2:
-				adc[1].did = cfg->attr.did;
-				adc[1].scale = 2;
-				adc[1].label = cfg->label;
-				break;
 			case ADC5VS5x10:
-				adc[1].did = cfg->attr.did;
-				adc[1].scale = 10;
-				adc[1].label = cfg->label;
+				ec_get_dev_attr(&adc->attr[1], dyn);
+				adc->num++;
 				break;
-			case ADCCMOSBAT:
-				adc[2].did = cfg->attr.did;
-				adc[2].scale = 1;
-				adc[2].label = cfg->label;
+			case CMOSBAT:
+			case CMOSBATx2:
+			case CMOSBATx10:
+				ec_get_dev_attr(&adc->attr[2], dyn);
+				adc->num++;
 				break;
-			case ADCCMOSBATx2:
-				adc[2].did = cfg->attr.did;
-				adc[2].scale = 2;
-				adc[2].label = cfg->label;
-				break;
-			case ADCCMOSBATx10:
-				adc[2].did = cfg->attr.did;
-				adc[2].scale = 10;
-				adc[2].label = cfg->label;
-				break;
-			case ADCVCOREA:
-				adc[3].did = cfg->attr.did;
-				adc[3].scale = 1;
-				adc[3].label = cfg->label;
-				break;
+			case VCOREA:
 			case ADC5VS0:
-				adc[3].did = cfg->attr.did;
-				adc[3].scale = 1;
-				adc[3].label = cfg->label;
-				break;
 			case ADC5VS0x2:
-				adc[3].did = cfg->attr.did;
-				adc[3].scale = 2;
-				adc[3].label = cfg->label;
-				break;
 			case ADC5VS0x10:
-				adc[3].did = cfg->attr.did;
-				adc[3].scale = 10;
-				adc[3].label = cfg->label;
+				ec_get_dev_attr(&adc->attr[3], dyn);
+				adc->num++;
 				break;
-			case ADCCurrent:
-				adc[4].did = cfg->attr.did;
-				adc[4].scale = 1;
-				adc[4].label = cfg->label;
-				break;
+			case CURRENT:
 			case ADC33VS0:
-				adc[4].did = cfg->attr.did;
-				adc[4].scale = 1;
-				adc[4].label = cfg->label;
-				break;
 			case ADC33VS0x2:
-				adc[4].did = cfg->attr.did;
-				adc[4].scale = 2;
-				adc[4].label = cfg->label;
-				break;
 			case ADC33VS0x10:
-				adc[4].did = cfg->attr.did;
-				adc[4].scale = 10;
-				adc[4].label = cfg->label;
+				ec_get_dev_attr(&adc->attr[4], dyn);
+				adc->num++;
 				break;
 			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
+				pr_err("DID 0x%02X not handled\n", dyn->did);
 				return -EINVAL;
 			}
 		}
@@ -1305,66 +926,42 @@ int imanager_get_adc_cfg(struct adc_cfg *adc)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_adc_cfg);
 
-int imanager_get_fan_cfg(struct fan_cfg *fan)
+static int ec_get_dev_fan(struct ec_data *ec)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct dev_fan *fan = &ec->sensors.fan;
 
-	if (WARN_ON(!fan))
-		return -EINVAL;
-
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == TACH || cfg->type == PWM) {
-			switch (cfg->attr.did) {
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && ((dyn->devtbl->type == TACH) || \
+				 (dyn->devtbl->type == PWM))) {
+			switch (dyn->did) {
 			case CPUFAN_2P:
-				fan[0].did = cfg->attr.did;
-				fan[0].hwp = cfg->attr.hwp;
-				fan[0].pulse = 1;
-				fan[0].label = cfg->label;
-				break;
 			case CPUFAN_4P:
-				fan[0].did = cfg->attr.did;
-				fan[0].hwp = cfg->attr.hwp;
-				fan[0].pulse = 2;
-				fan[0].label = cfg->label;
+				ec_get_dev_attr(&fan->attr[0], dyn);
+				fan->num++;
 				break;
 			case SYSFAN1_2P:
-				fan[1].did = cfg->attr.did;
-				fan[1].hwp = cfg->attr.hwp;
-				fan[1].pulse = 1;
-				fan[1].label = cfg->label;
-				break;
 			case SYSFAN1_4P:
-				fan[1].did = cfg->attr.did;
-				fan[1].hwp = cfg->attr.hwp;
-				fan[1].pulse = 2;
-				fan[1].label = cfg->label;
+				ec_get_dev_attr(&fan->attr[1], dyn);
+				fan->num++;
 				break;
 			case SYSFAN2_2P:
-				fan[2].did = cfg->attr.did;
-				fan[2].hwp = cfg->attr.hwp;
-				fan[2].pulse = 1;
-				fan[2].label = cfg->label;
-				break;
 			case SYSFAN2_4P:
-				fan[2].did = cfg->attr.did;
-				fan[2].hwp = cfg->attr.hwp;
-				fan[2].pulse = 2;
-				fan[2].label = cfg->label;
+				ec_get_dev_attr(&fan->attr[2], dyn);
+				fan->num++;
 				break;
 			case TACHO0:
 			case TACHO1:
 			case TACHO2:
-			case PWMBRIGHTNESS:
-			case PWMBRIGHTNESS2:
-			case PWMBEEP:
+			case BRIGHTNESS:
+			case BRIGHTNESS2:
+			case PCBEEP:
 				break;
 			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
+				pr_err("DID 0x%02X not handled\n", dyn->did);
 				return -EINVAL;
 			}
 		}
@@ -1372,27 +969,43 @@ int imanager_get_fan_cfg(struct fan_cfg *fan)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_fan_cfg);
 
-int imanager_get_backlight_cfg(struct backlight_cfg *blc)
+static int ec_get_dev_hwmon(struct ec_data *ec)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	int ret;
 
-	if (WARN_ON(!blc))
-		return -EINVAL;
+	ret = ec_get_dev_adc(ec);
+	if (ret < 0)
+		return ret;
 
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == PWM) {
-			switch (cfg->attr.did) {
-			case PWMBRIGHTNESS:
-				blc[0].did = cfg->attr.did;
-				blc[0].label = cfg->label;
+	ret = ec_get_dev_fan(ec);
+	if (ret < 0)
+		return ret;
+
+	ec->sensors.info = &ec->info;
+
+	return 0;
+}
+
+static int ec_get_dev_blc(struct ec_data *ec)
+{
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_backlight_device *blc = &ec->blc;
+
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == PWM)) {
+			switch (dyn->did) {
+			case BRIGHTNESS:
+				ec_get_dev_attr(&blc->attr[0], dyn);
+				blc->brightness[0] = EC_ACPIRAM_BRIGHTNESS1;
+				blc->num++;
 				break;
-			case PWMBRIGHTNESS2:
-				blc[1].did = cfg->attr.did;
-				blc[1].label = cfg->label;
+			case BRIGHTNESS2:
+				ec_get_dev_attr(&blc->attr[1], dyn);
+				blc->brightness[1] = EC_ACPIRAM_BRIGHTNESS2;
+				blc->num++;
 				break;
 			case CPUFAN_2P:
 			case CPUFAN_4P:
@@ -1400,121 +1013,121 @@ int imanager_get_backlight_cfg(struct backlight_cfg *blc)
 			case SYSFAN1_4P:
 			case SYSFAN2_2P:
 			case SYSFAN2_4P:
-			case PWMBEEP:
+			case PCBEEP:
 			case TACHO0:
 			case TACHO1:
 			case TACHO2:
 				break;
 			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
+				pr_err("DID 0x%02X not handled\n", dyn->did);
 				return -EINVAL;
 			}
 		}
 	}
 
+	blc->info = &ec->info;
+
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_backlight_cfg);
 
-int imanager_get_gpio_cfg(struct gpio_cfg *gpio)
+static int ec_get_dev_gpio(struct ec_data *ec)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_gpio_device *gpio = &ec->gpio;
 
-	if (WARN_ON(!gpio))
-		return -EINVAL;
-
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == GPIO) {
-			switch (cfg->attr.did) {
-			case AltGPIO0:
-				gpio[0].did = cfg->attr.did;
-				gpio[0].label = cfg->label;
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == GPIO)) {
+			switch (dyn->did) {
+			case ALTGPIO0:
+				ec_get_dev_attr(&gpio->attr[0], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO1:
-				gpio[1].did = cfg->attr.did;
-				gpio[1].label = cfg->label;
+			case ALTGPIO1:
+				ec_get_dev_attr(&gpio->attr[1], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO2:
-				gpio[2].did = cfg->attr.did;
-				gpio[2].label = cfg->label;
+			case ALTGPIO2:
+				ec_get_dev_attr(&gpio->attr[2], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO3:
-				gpio[3].did = cfg->attr.did;
-				gpio[3].label = cfg->label;
+			case ALTGPIO3:
+				ec_get_dev_attr(&gpio->attr[3], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO4:
-				gpio[4].did = cfg->attr.did;
-				gpio[4].label = cfg->label;
+			case ALTGPIO4:
+				ec_get_dev_attr(&gpio->attr[4], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO5:
-				gpio[5].did = cfg->attr.did;
-				gpio[5].label = cfg->label;
+			case ALTGPIO5:
+				ec_get_dev_attr(&gpio->attr[5], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO6:
-				gpio[6].did = cfg->attr.did;
-				gpio[6].label = cfg->label;
+			case ALTGPIO6:
+				ec_get_dev_attr(&gpio->attr[6], dyn);
+				gpio->num++;
 				break;
-			case AltGPIO7:
-				gpio[7].did = cfg->attr.did;
-				gpio[7].label = cfg->label;
+			case ALTGPIO7:
+				ec_get_dev_attr(&gpio->attr[7], dyn);
+				gpio->num++;
 				break;
-			case Btn0:
-			case Btn1:
-			case Btn2:
-			case Btn3:
-			case Btn4:
-			case Btn5:
-			case Btn6:
-			case Btn7:
-			case PowerLED:
-			case BatLEDG:
+			case BUTTON0:
+			case BUTTON1:
+			case BUTTON2:
+			case BUTTON3:
+			case BUTTON4:
+			case BUTTON5:
+			case BUTTON6:
+			case BUTTON7:
+			case POWERLED:
+			case BATLEDG:
 			case OEMLED0:
 			case OEMLED1:
 			case OEMLED2:
-			case BatLEDR:
+			case BATLEDR:
 			case WDNMI:
 			case BACKLIGHT1:
 			case BACKLIGHT2:
 				break;
 			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
+				pr_err("DID 0x%02X not handled\n", dyn->did);
 				return -EINVAL;
 			}
 		}
 	}
 
+	gpio->info = &ec->info;
+
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_gpio_cfg);
 
-int imanager_get_i2c_cfg(struct i2c_cfg *i2c)
+static int ec_get_dev_smb(struct ec_data *ec)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_smbus_device *smb = &ec->smb;
 
-	if (WARN_ON(!i2c))
-		return -EINVAL;
-
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == SMB) {
-			switch (cfg->attr.did) {
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == SMB)) {
+			switch (dyn->did) {
 			case SMBEEPROM:
-				i2c->smbeeprom = cfg->attr.did;
+				ec_get_dev_attr(&smb->attr[0], dyn);
+				smb->smbeeprom = &smb->attr[0];
+				smb->num++;
 				break;
 			case I2COEM:
-				i2c->i2coem = cfg->attr.did;
+				ec_get_dev_attr(&smb->attr[1], dyn);
+				smb->i2coem = &smb->attr[1];
+				smb->num++;
 				break;
 			case SMBOEM0:
 			case SMBOEM1:
 			case SMBOEM2:
 			case SMBTHERMAL0:
 			case SMBTHERMAL1:
-			case SMBSecurityEEP:
+			case SMBSECEEP:
 			case SMBEEP2K:
 			case OEMEEP:
 			case OEMEEP2K:
@@ -1522,48 +1135,199 @@ int imanager_get_i2c_cfg(struct i2c_cfg *i2c)
 			case SMBOEM3:
 			case SMLINK:
 			case SMBSLV:
-			case SmartBat1:
-			case SmartBat2:
+			case SMARTBAT1:
+			case SMARTBAT2:
 				break;
 			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
+				pr_err("DID 0x%02X not handled\n", dyn->did);
 				return -EINVAL;
 			}
 		}
 	}
 
+	smb->info = &ec->info;
+
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_i2c_cfg);
 
-int imanager_get_wdt_cfg(struct wdt_cfg *wdt)
+static int ec_get_dev_wdt(struct ec_data *ec)
 {
-	size_t i;
-	struct ec_dev_cfg *cfg;
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_watchdog_device *wdt = &ec->wdt;
 
-	if (WARN_ON(!wdt))
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == IRQ)) {
+			switch (dyn->did) {
+			case WDIRQ:
+				ec_get_dev_attr(&wdt->attr[0], dyn);
+				wdt->irq = &wdt->attr[0];
+				wdt->num++;
+				break;
+			case WDNMI:
+				ec_get_dev_attr(&wdt->attr[1], dyn);
+				wdt->nmi = &wdt->attr[1];
+				wdt->num++;
+				break;
+			default:
+				pr_err("DID 0x%02X not handled\n", dyn->did);
+				return -EINVAL;
+			}
+		}
+	}
+
+	wdt->info = &ec->info;
+
+	return 0;
+}
+
+const struct imanager_hwmon_device *imanager_get_hwmon_device(void)
+{
+	return &ec.sensors;
+}
+EXPORT_SYMBOL_GPL(imanager_get_hwmon_device);
+
+const struct imanager_gpio_device *imanager_get_gpio_device(void)
+{
+	return &ec.gpio;
+}
+EXPORT_SYMBOL_GPL(imanager_get_gpio_device);
+
+const struct imanager_smbus_device *imanager_get_smb_device(void)
+{
+	return &ec.smb;
+}
+EXPORT_SYMBOL_GPL(imanager_get_smb_device);
+
+const struct imanager_backlight_device *imanager_get_backlight_device(void)
+{
+	return &ec.blc;
+}
+EXPORT_SYMBOL_GPL(imanager_get_backlight_device);
+
+const struct imanager_watchdog_device *imanager_get_watchdog_device(void)
+{
+	return &ec.wdt;
+}
+EXPORT_SYMBOL_GPL(imanager_get_watchdog_device);
+
+int imanager_get_chipid(void)
+{
+	if (!ec.chipid)
 		return -EINVAL;
 
-	for (i = 0; i < ARRAY_SIZE(ec.cfg); i++) {
-		cfg = &ec.cfg[i];
-		if (cfg->type == IRQ) {
-			switch (cfg->attr.did) {
-			case WDIRQ:
-				wdt->irq = cfg->attr.did;
-				break;
-			/* WDNMI is not handled since it is of type 'GPIO' */
-			default:
-				pr_err("DID 0x%02X not handled\n",
-					cfg->attr.did);
-				return -EINVAL;
-			}
-		}
-	}
+	return ec.chipid;
+}
+EXPORT_SYMBOL_GPL(imanager_get_chipid);
+
+static int ec_get_version(struct ec_version *version)
+{
+	int ret;
+	u16 raw;
+	struct ec_version_raw ver;
+
+	if (WARN_ON(!version))
+		return -EINVAL;
+
+	ret = ec_read_ram(EC_RAM_ACPI, EC_ACPIRAM_FW_RELEASE_RD, sizeof(ver),
+			 (u8 *)&ver, sizeof(ver));
+	if (ret < 0)
+		return ret;
+
+	raw = swab16(ver.kernel);
+	version->kernel_major = EC_KERNEL_MAJOR(raw);
+	version->kernel_minor = EC_KERNEL_MINOR(raw);
+
+	raw = swab16(ver.firmware);
+	version->firmware_major = EC_FIRMWARE_MAJOR(raw);
+	version->firmware_minor = EC_FIRMWARE_MINOR(raw);
+
+	raw = swab16(ver.project_code);
+	version->type = EC_PROJECT_CODE(raw);
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(imanager_get_wdt_cfg);
+
+static int ec_get_pcb_name(struct ec_info *info)
+{
+	int ret;
+	struct ec_message msg = {
+		.rlen = ARRAY_SIZE(info->pcb_name),
+		.wlen = 0,
+	};
+
+	if (WARN_ON(!info))
+		return -EINVAL;
+
+	ret = imanager_msg_read(EC_CMD_FW_INFO_RD, 0, &msg);
+	if (ret)
+		return ret;
+
+	/*
+	 * Sadly, the string is not Null-terminated so we will need to read a
+	 * fixed amount of chars. There is, apparently, no exact definition
+	 * of board name (SOM6867 vs. MIO-5271).
+	 */
+	memset(info->pcb_name, 0, ARRAY_SIZE(info->pcb_name));
+	strncpy(info->pcb_name, (const char *)msg.u.data, PCB_NAME_MAX_SIZE);
+
+	if (strchr(info->pcb_name, '-') == NULL)
+		info->pcb_name[PCB_NAME_MAX_SIZE - 1] = '\0';
+
+	return 0;
+}
+
+static int ec_get_fw_info(struct ec_info *info)
+{
+	int ret;
+
+	if (WARN_ON(!info))
+		return -EINVAL;
+
+	ret = ec_get_version(&info->version);
+	if (ret)
+		return ret;
+
+	return ec_get_pcb_name(info);
+}
+
+static int ec_init(void)
+{
+	int ret;
+
+	ec_clear_ports();
+
+	ret = ec_read_dynamic_devtbl(&ec);
+	if (ret)
+		return ret;
+
+	ret = ec_get_fw_info(&ec.info);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_hwmon(&ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_gpio(&ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_smb(&ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_blc(&ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_wdt(&ec);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
 
 int imanager_ec_probe(u16 addr)
 {
@@ -1595,11 +1359,3 @@ int imanager_ec_probe(u16 addr)
 	return ec_init();
 }
 
-int imanager_get_chipid(void)
-{
-	if (!ec.chipid)
-		return -EINVAL;
-
-	return ec.chipid;
-}
-EXPORT_SYMBOL_GPL(imanager_get_chipid);

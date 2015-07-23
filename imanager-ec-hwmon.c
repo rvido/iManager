@@ -15,16 +15,20 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 #include <linux/swab.h>
-#include "ec.h"
-#include "hwmon.h"
+#include <ec.h>
+#include <hwmon.h>
 
 #define HWM_STATUS_UNDEFINED_ITEM	2UL
 #define HWM_STATUS_UNDEFINED_DID	3UL
 #define HWM_STATUS_UNDEFINED_HWPIN	4UL
 
-struct fan_dev_settings {
+/*
+ * FAN defs
+ */
+
+struct fan_dev_config {
 	u8	did,
-		hwp,
+		hwpin,
 		tachoid,
 		status,
 		control,
@@ -41,11 +45,11 @@ struct fan_dev_settings {
 };
 
 struct fan_status {
-	u32	sysctl	: 1,	/* System Control */
-		ftacho	: 1,	/* FAN tacho source defined */
-		fpulse	: 1,	/* FAN pulse type defined */
+	u32	sysctl	: 1,	/* System Control flag */
+		tacho	: 1,	/* FAN tacho source defined */
+		pulse	: 1,	/* FAN pulse type defined */
 		thermal	: 1,	/* Thermal zone init */
-		i2cfail	: 1,	/* I2C protocol failure (thermal sensor) */
+		i2clink	: 1,	/* I2C protocol fail flag (thermal sensor) */
 		dnc	: 1,	/* don't care */
 		mode	: 2;	/* FAN Control mode */
 };
@@ -66,7 +70,7 @@ struct fan_alert_flag {
 		fan1_max_alarm	: 1,
 		fan2_min_alarm	: 1,
 		fan2_max_alarm	: 1,
-		dnc		: 2;
+		dnc		: 2; /* don't care */
 };
 
 /*----------------------------------------------------*
@@ -101,12 +105,6 @@ enum fan_limit {
 	LIMIT_TEMP,
 };
 
-struct hwm_sensors {
-	struct ec_info		info;
-	struct adc_cfg		adc[EC_HWM_MAX_ADC];
-	struct fan_cfg		fan[EC_HWM_MAX_FAN];
-};
-
 static const char * fan_temp_label[] = {
 	"Temp CPU",
 	"Temp SYS1",
@@ -114,7 +112,7 @@ static const char * fan_temp_label[] = {
 	NULL,
 };
 
-static struct hwm_sensors sensors;
+static const struct imanager_hwmon_device *dev;
 
 static inline int hwm_get_adc_value(u8 did)
 {
@@ -136,69 +134,45 @@ static inline int hwm_set_pwm_value(u8 did, u8 val)
 	return imanager_write_byte(EC_CMD_HWP_WR, did, val);
 }
 
-int hwm_core_get_thermal_temp(enum fan_unit unit)
-{
-	int ret;
-
-	switch (unit) {
-	case FAN_CPU:
-		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_REMOTE1);
-		break;
-	case FAN_SYS1:
-		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_LOCAL1);
-		break;
-	case FAN_SYS2:
-		ret = imanager_acpiram_read_byte(EC_ACPIRAM_THERMAL_REMOTE2);
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	if (!ret || (ret > 0x80))
-		return -ERANGE;
-
-	return ret;
-}
-
-static int hwm_read_fan_config(int fnum, struct fan_dev_settings *dev)
+static int hwm_read_fan_config(int num, struct fan_dev_config *cfg)
 {
 	int ret;
 	struct ec_message msg = {
-		.rlen = 0xff,
+		.rlen = 0xff, /* use alternative message body */
 		.wlen = 0,
 	};
-	struct fan_dev_settings *_dev = (struct fan_dev_settings *)&msg.u.data;
+	struct fan_dev_config *_cfg = (struct fan_dev_config *)&msg.u.data;
 
-	if (WARN_ON(!dev))
+	if (WARN_ON(!cfg))
 		return -EINVAL;
 
-	ret = imanager_msg_read(EC_CMD_FAN_CTL_RD, fnum, &msg);
+	ret = imanager_msg_read(EC_CMD_FAN_CTL_RD, num, &msg);
 	if (ret)
 		return ret;
 
-	if (!_dev->did)
+	if (!_cfg->did)
 		return -ENODEV;
 
-	memcpy(dev, &msg.u.data, sizeof(struct fan_dev_settings));
+	memcpy(cfg, &msg.u.data, sizeof(struct fan_dev_config));
 
 	return 0;
 }
 
-static int hwm_write_fan_config(int fnum, struct fan_dev_settings *dev)
+static int hwm_write_fan_config(int fnum, struct fan_dev_config *cfg)
 {
 	int ret;
 	struct ec_message msg = {
 		.rlen = 0,
-		.wlen = sizeof(struct fan_dev_settings),
+		.wlen = sizeof(struct fan_dev_config),
 	};
 
 	if (WARN_ON(!dev))
 		return -EINVAL;
 
-	if (!dev->did)
+	if (!cfg->did)
 		return -ENODEV;
 
-	msg.data = (u8 *)dev;
+	msg.data = (u8 *)cfg;
 
 	ret = imanager_msg_write(EC_CMD_FAN_CTL_WR, fnum, &msg);
 	if (ret < 0)
@@ -220,34 +194,34 @@ static int hwm_write_fan_config(int fnum, struct fan_dev_settings *dev)
 	return ret;
 }
 
-static inline void hwm_set_temp_limit(struct fan_dev_settings *dev,
+static inline void hwm_set_temp_limit(struct fan_dev_config *cfg,
 				      const struct hwm_fan_temp_limit *temp)
 {
-	dev->temp_stop = temp->stop;
-	dev->temp_min  = temp->min;
-	dev->temp_max  = temp->max;
+	cfg->temp_stop = temp->stop;
+	cfg->temp_min  = temp->min;
+	cfg->temp_max  = temp->max;
 }
 
-static inline void hwm_set_pwm_limit(struct fan_dev_settings *dev,
+static inline void hwm_set_pwm_limit(struct fan_dev_config *cfg,
 				     const struct hwm_fan_limit *pwm)
 {
-	dev->pwm_min = pwm->min;
-	dev->pwm_max = pwm->max;
+	cfg->pwm_min = pwm->min;
+	cfg->pwm_max = pwm->max;
 }
 
-static inline void hwm_set_rpm_limit(struct fan_dev_settings *dev,
+static inline void hwm_set_rpm_limit(struct fan_dev_config *cfg,
 				     const struct hwm_fan_limit *rpm)
 {
-	dev->rpm_min = swab16(rpm->min);
-	dev->rpm_max = swab16(rpm->max);
+	cfg->rpm_min = swab16(rpm->min);
+	cfg->rpm_max = swab16(rpm->max);
 }
 
-static inline void hwm_set_limit(struct fan_dev_settings *dev,
+static inline void hwm_set_limit(struct fan_dev_config *cfg,
 				 const struct hwm_sensors_limit *limit)
 {
-	hwm_set_temp_limit(dev, &limit->temp);
-	hwm_set_pwm_limit(dev, &limit->pwm);
-	hwm_set_rpm_limit(dev, &limit->rpm);
+	hwm_set_temp_limit(cfg, &limit->temp);
+	hwm_set_pwm_limit(cfg, &limit->pwm);
+	hwm_set_rpm_limit(cfg, &limit->rpm);
 }
 
 static int hwm_core_get_fan_alert_flag(struct fan_alert_flag *flag)
@@ -264,7 +238,7 @@ static int hwm_core_get_fan_alert_flag(struct fan_alert_flag *flag)
 	return 0;
 }
 
-static int hwm_core_get_fan_alert_limit(enum fan_unit unit,
+static int hwm_core_get_fan_alert_limit(int fnum,
 				        struct hwm_smartfan *fan)
 {
 	int ret;
@@ -280,7 +254,7 @@ static int hwm_core_get_fan_alert_limit(enum fan_unit unit,
 	if (ret < 0)
 		return ret;
 
-	switch (unit) {
+	switch (fnum) {
 	case FAN_CPU:
 		fan->alert.min = swab16(limit.fan0_min);
 		fan->alert.max = swab16(limit.fan0_max);
@@ -300,14 +274,14 @@ static int hwm_core_get_fan_alert_limit(enum fan_unit unit,
 		fan->alert.max_alarm = flag.fan2_max_alarm;
 		break;
 	default:
-		pr_err("Unknown FAN ID %d\n", unit);
+		pr_err("Unknown FAN ID %d\n", fnum);
 		return -EINVAL;
 	}
 
 	return 0;
 }
 
-static int hwm_core_set_fan_alert_limit(enum fan_unit unit,
+static int hwm_core_set_fan_alert_limit(int fnum,
 					struct hwm_fan_alert *alert)
 {
 	int ret;
@@ -318,7 +292,7 @@ static int hwm_core_set_fan_alert_limit(enum fan_unit unit,
 	if (ret < 0)
 		return ret;
 
-	switch (unit) {
+	switch (fnum) {
 	case FAN_CPU:
 		limit.fan0_min = swab16(alert->min);
 		limit.fan0_max = swab16(alert->max);
@@ -332,7 +306,7 @@ static int hwm_core_set_fan_alert_limit(enum fan_unit unit,
 		limit.fan2_max = swab16(alert->max);
 		break;
 	default:
-		pr_err("Unknown FAN ID %d\n", unit);
+		pr_err("Unknown FAN ID %d\n", fnum);
 		return -EINVAL;
 	}
 
@@ -342,51 +316,51 @@ static int hwm_core_set_fan_alert_limit(enum fan_unit unit,
 
 /* HWM CORE API */
 
-const char * hwm_core_get_adc_label(u32 num)
+const char * hwm_core_get_adc_label(int num)
 {
 	if (WARN_ON(num >= EC_HWM_MAX_ADC))
 		return NULL;
 
-	return sensors.adc[num].label;
+	return dev->adc.attr[num].label;
 }
 
-const char * hwm_core_get_fan_label(enum fan_unit unit)
+const char * hwm_core_get_fan_label(int num)
 {
-	if (WARN_ON(unit >= HWM_MAX_FAN))
+	if (WARN_ON(num >= HWM_MAX_FAN))
 		return NULL;
 
-	return sensors.fan[unit].label;
+	return dev->fan.attr[num].label;
 }
 
-const char * hwm_core_get_fan_temp_label(enum fan_unit unit)
+const char * hwm_core_get_fan_temp_label(int num)
 {
 	int ret;
 
-	if (WARN_ON(unit >= HWM_MAX_FAN))
+	if (WARN_ON(num >= HWM_MAX_FAN))
 		return NULL;
 
-	ret = hwm_core_check_fan(unit);
+	ret = hwm_core_check_fan(num);
 
-	return ret ? NULL : fan_temp_label[unit];
+	return ret ? NULL : fan_temp_label[num];
 }
 
-int hwm_core_check_adc(u32 num)
+int hwm_core_check_adc(int num)
 {
 	if (WARN_ON(num >= HWM_MAX_ADC))
 		return -EINVAL;
 
-	return sensors.adc[num].did ? 0 : -ENODEV;
+	return dev->adc.attr[num].did ? 0 : -ENODEV;
 }
 
-int hwm_core_get_adc(u32 num, struct hwm_voltage *volt)
+int hwm_core_get_adc(int num, struct hwm_voltage *volt)
 {
-	int val;
+	int ret;
 
 	if (!hwm_core_check_adc(num)) {
-		val = hwm_get_adc_value(sensors.adc[num].did);
-		if (val < 0)
-			return val;
-		volt->value = val * sensors.adc[num].scale;
+		ret = hwm_get_adc_value(dev->adc.attr[num].did);
+		if (ret < 0)
+			return ret;
+		volt->value = ret * dev->adc.attr[num].scale;
 		volt->valid = true;
 	}
 	else {
@@ -396,22 +370,24 @@ int hwm_core_get_adc(u32 num, struct hwm_voltage *volt)
 	return 0;
 }
 
-int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
+int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan)
 {
 	int ret;
-	struct fan_dev_settings dev;
-	struct fan_ctrl *ctrl = (struct fan_ctrl *)&dev.control;
+	struct fan_dev_config cfg;
+	struct fan_ctrl *ctrl = (struct fan_ctrl *)&cfg.control;
 
-	if (WARN_ON((unit >= HWM_MAX_FAN) || !fan))
+	if (WARN_ON((num >= HWM_MAX_FAN) || !fan))
 		return -EINVAL;
 
-	ret = hwm_core_check_fan(unit);
+	fan->valid = false;
+
+	ret = hwm_core_check_fan(num);
 	if (ret < 0)
 		return ret;
 
 	memset(fan, 0, sizeof(struct hwm_smartfan));
 
-	ret = hwm_read_fan_config(unit, &dev);
+	ret = hwm_read_fan_config(num, &cfg);
 	if (ret < 0)
 		return ret;
 
@@ -419,13 +395,13 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 	fan->type = ctrl->type;
 
 	/*
-	 * It seems that status->mode does not always report the correct
+	 * It seems that fan->mode does not always report the correct
 	 * FAN mode so the only way of reporting the current FAN mode is
 	 * to read back ctrl->mode.
 	 */
 	fan->mode = ctrl->mode;
 
-	ret = hwm_get_rpm_value(dev.tachoid);
+	ret = hwm_get_rpm_value(cfg.tachoid);
 	if (ret < 0) {
 		pr_err("Failed to read FAN speed\n");
 		return ret;
@@ -433,9 +409,9 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 
 	fan->speed = ret;
 
-	ret = hwm_get_pwm_value(sensors.fan[unit].did);
+	ret = hwm_get_pwm_value(dev->fan.attr[num].did);
 	if (ret < 0) {
-		pr_err("Failed to read FAN%d PWM\n", unit);
+		pr_err("Failed to read FAN%d PWM\n", num);
 		return ret;
 	}
 
@@ -443,20 +419,15 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 
 	fan->alarm = (fan->pwm && !fan->speed) ? 1 : 0;
 
-	if (sensors.fan[unit].has_thermal_sens)
-		fan->temp = hwm_core_get_thermal_temp(unit);
-	else
-		fan->temp = dev.temp;
+	fan->limit.temp.min	= cfg.temp_min;
+	fan->limit.temp.max	= cfg.temp_max;
+	fan->limit.temp.stop	= cfg.temp_stop;
+	fan->limit.pwm.min	= cfg.pwm_min;
+	fan->limit.pwm.max	= cfg.pwm_max;
+	fan->limit.rpm.min	= swab16(cfg.rpm_min);
+	fan->limit.rpm.max	= swab16(cfg.rpm_max);
 
-	fan->limit.temp.min	= dev.temp_min;
-	fan->limit.temp.max	= dev.temp_max;
-	fan->limit.temp.stop	= dev.temp_stop;
-	fan->limit.pwm.min	= dev.pwm_min;
-	fan->limit.pwm.max	= dev.pwm_max;
-	fan->limit.rpm.min	= swab16(dev.rpm_min);
-	fan->limit.rpm.max	= swab16(dev.rpm_max);
-
-	ret = hwm_core_get_fan_alert_limit(unit, fan);
+	ret = hwm_core_get_fan_alert_limit(num, fan);
 	if (ret)
 		return ret;
 
@@ -465,33 +436,29 @@ int hwm_core_get_fan_ctrl(enum fan_unit unit, struct hwm_smartfan *fan)
 	return 0;
 }
 
-int hwm_core_set_fan_ctrl(enum fan_unit unit,
-			  enum fan_mode mode,
-			  enum fan_ctrl_type type,
-			  u32 pwm,
-			  u32 pulse,
+int hwm_core_set_fan_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 			  struct hwm_sensors_limit *limit,
 			  struct hwm_fan_alert *alert)
 {
 	int ret;
-	struct fan_dev_settings dev;
-	struct fan_ctrl *ctrl = (struct fan_ctrl *)&dev.control;
-	struct hwm_sensors_limit _limit = {{0, 0, 0}, {0, 0}, {0, 0}};
+	struct fan_dev_config cfg;
+	struct fan_ctrl *ctrl = (struct fan_ctrl *)&cfg.control;
+	struct hwm_sensors_limit _limit = { {0, 0, 0}, {0, 0}, {0, 0} };
 
-	if (WARN_ON(unit >= HWM_MAX_FAN))
+	if (WARN_ON(num >= HWM_MAX_FAN))
 		return -EINVAL;
 
-	ret = hwm_read_fan_config(unit, &dev);
+	ret = hwm_read_fan_config(num, &cfg);
 	if (ret < 0) {
 		pr_err("Failed while reading FAN %s config\n",
-			sensors.fan[unit].label);
+			dev->fan.attr[num].label);
 		return ret;
 	}
 
 	if (!limit)
 		limit = &_limit;
 
-	switch (mode) {
+	switch (fmode) {
 	case MODE_OFF:
 		ctrl->type = CTRL_PWM;
 		ctrl->mode = MODE_OFF;
@@ -503,12 +470,12 @@ int hwm_core_set_fan_ctrl(enum fan_unit unit,
 	case MODE_MANUAL:
 		ctrl->type = CTRL_PWM;
 		ctrl->mode = MODE_MANUAL;
-		ret = hwm_set_pwm_value(sensors.fan[unit].did, pwm);
+		ret = hwm_set_pwm_value(dev->fan.attr[num].did, pwm);
 		if (ret < 0)
 			return ret;
 		break;
 	case MODE_AUTO:
-		switch (type) {
+		switch (ftype) {
 		case CTRL_PWM:
 			limit->rpm.min = 0;
 			limit->rpm.max = 0;
@@ -528,61 +495,60 @@ int hwm_core_set_fan_ctrl(enum fan_unit unit,
 		return -EINVAL;
 	}
 
-	hwm_set_limit(&dev, limit);
+	hwm_set_limit(&cfg, limit);
 
 	ctrl->pulse = (pulse && (pulse < 3)) ? pulse : 0;
 	ctrl->enable = 1;
 
-	ret = hwm_write_fan_config(unit, &dev);
+	ret = hwm_write_fan_config(num, &cfg);
 	if (ret < 0)
 		return ret;
 
 	if (alert)
-		return hwm_core_set_fan_alert_limit(unit, alert);
+		return hwm_core_set_fan_alert_limit(num, alert);
 
 	return 0;
 }
 
-int hwm_core_check_fan(enum fan_unit unit)
+int hwm_core_check_fan(int fnum)
 {
-	return sensors.fan[unit].did ? 0 : -ENODEV;
+	return dev->fan.attr[fnum].did ? 0 : -ENODEV;
 }
 
-static int hwm_core_set_fan_limit(enum fan_unit unit,
-				  enum fan_limit type,
+static int hwm_core_set_fan_limit(int num, int fan_limit,
 				  struct hwm_sensors_limit *limit)
 {
-	struct fan_dev_settings dev;
+	struct fan_dev_config cfg;
 	int ret;
 
-	if (WARN_ON(unit >= HWM_MAX_FAN))
+	if (WARN_ON(num >= HWM_MAX_FAN))
 		return -EINVAL;
 
-	ret = hwm_read_fan_config(unit, &dev);
+	ret = hwm_read_fan_config(num, &cfg);
 	if (ret < 0) {
 		pr_err("Failed while reading FAN %s config\n",
-			sensors.fan[unit].label);
+			dev->fan.attr[num].label);
 		return ret;
 	}
 
-	switch (type) {
+	switch (fan_limit) {
 	case LIMIT_PWM:
-		hwm_set_pwm_limit(&dev, &limit->pwm);
+		hwm_set_pwm_limit(&cfg, &limit->pwm);
 		break;
 	case LIMIT_RPM:
-		hwm_set_rpm_limit(&dev, &limit->rpm);
+		hwm_set_rpm_limit(&cfg, &limit->rpm);
 		break;
 	case LIMIT_TEMP:
-		hwm_set_temp_limit(&dev, &limit->temp);
+		hwm_set_temp_limit(&cfg, &limit->temp);
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	return hwm_write_fan_config(unit, &dev);
+	return hwm_write_fan_config(num, &cfg);
 }
 
-int hwm_core_set_fan_limit_rpm(enum fan_unit unit, int min, int max)
+int hwm_core_set_fan_limit_rpm(int num, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.rpm = {
@@ -591,10 +557,10 @@ int hwm_core_set_fan_limit_rpm(enum fan_unit unit, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(unit, LIMIT_RPM, &limit);
+	return hwm_core_set_fan_limit(num, LIMIT_RPM, &limit);
 }
 
-int hwm_core_set_fan_limit_pwm(enum fan_unit unit, int min, int max)
+int hwm_core_set_fan_limit_pwm(int num, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.pwm = {
@@ -603,10 +569,10 @@ int hwm_core_set_fan_limit_pwm(enum fan_unit unit, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(unit, LIMIT_PWM, &limit);
+	return hwm_core_set_fan_limit(num, LIMIT_PWM, &limit);
 }
 
-int hwm_core_set_fan_limit_temp(enum fan_unit unit, int stop, int min, int max)
+int hwm_core_set_fan_limit_temp(int num, int stop, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.temp = {
@@ -616,34 +582,15 @@ int hwm_core_set_fan_limit_temp(enum fan_unit unit, int stop, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(unit, LIMIT_TEMP, &limit);
+	return hwm_core_set_fan_limit(num, LIMIT_TEMP, &limit);
 }
 
 int hwm_core_init(void)
 {
-	int ret;
-	int i;
-
-	memset(&sensors, 0, sizeof(sensors));
-
-	ret = imanager_get_fw_info(&sensors.info);
-	if (ret)
-		return ret;
-
-	ret = imanager_get_adc_cfg(sensors.adc);
-	if (ret)
-		return ret;
-
-	ret = imanager_get_fan_cfg(sensors.fan);
-	if (ret)
-		return ret;
-
-	for (i = 0; i < HWM_MAX_FAN; i++) {
-		ret = hwm_core_get_thermal_temp(i);
-		if (ret < 0)
-			continue;
-		else
-			sensors.fan[i].has_thermal_sens = true;
+	dev = imanager_get_hwmon_device();
+	if (!dev) {
+		hwm_core_release();
+		return -ENODEV;
 	}
 
 	return 0;
@@ -651,6 +598,4 @@ int hwm_core_init(void)
 
 void hwm_core_release(void)
 {
-	memset(&sensors, 0, sizeof(sensors));
 }
-

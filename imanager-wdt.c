@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Watchdog
+ * Advantech iManager Watchdog driver
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -21,9 +21,9 @@
 #include <linux/uaccess.h>
 #include <linux/platform_device.h>
 #include <linux/version.h>
-#include "compat.h"
-#include "core.h"
-#include "wdt.h"
+#include <compat.h>
+#include <core.h>
+#include <wdt.h>
 
 #define WATCHDOG_TIMEOUT 30 /* in seconds */
 

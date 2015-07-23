@@ -1,5 +1,5 @@
 /*
- * Advantech iManager MFD core (EC IT8518/28)
+ * Advantech iManager MFD core
  *
  * Copyright (C) 2015 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -16,12 +16,12 @@
 #include <linux/mutex.h>
 #include <linux/io.h>
 #include <linux/types.h>
-#include "ec.h"
+#include <ec.h>
 
 enum chips { IT8516, IT8518, IT8528 };
 
 struct imanager_platform_data {
-	struct ec_info	info;
+	const struct ec_info *info;
 };
 
 struct imanager_device_data {
