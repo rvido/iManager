@@ -8,17 +8,19 @@
 
 all: clean modules
 
-EXTRA_CFLAGS += -Wall -O2 -g
-# Uncomment below for Red Hat/CentOS/Scientific Linux <= 7.1
+ccflags-y += -Wall -O2 -I$(src)
+
+# OS specific switches
+# EXTRA_CFLAGS += -D__RHEL6__
 # EXTRA_CFLAGS += -D__RHEL7__
 
-NAME		:= imanager
+NAME			:= imanager
 
-DEPMOD		:= $(shell which depmod)
-STRIP		:= $(shell which strip)
-DRVPATH		:= /lib/modules/$(shell uname -r)/extra/$(NAME)
+DEPMOD			:= $(shell which depmod)
+STRIP			:= $(shell which strip)
+DRVPATH			:= /lib/modules/$(shell uname -r)/extra/$(NAME)
 
-# MFD driver is always anabled.
+# MFD driver is always enabled.
 CONFIG_MFD		:= m
 CONFIG_GPIO		:= m
 CONFIG_I2C		:= m
@@ -30,7 +32,7 @@ CONFIG_WDT		:= m
 # kernel build system and can use its language.
 ifneq ($(KERNELRELEASE), )
 
-	ccflags-y += $(EXTRA_CFLAGS) -I$(src)/include
+	ccflags-y += $(EXTRA_CFLAGS)
 	include $(src)/Makefile.kbuild
 else
 
@@ -46,7 +48,7 @@ modules:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	$(RM) -rf *.bak include/linux/mfd/imanager/*.bak
+	$(RM) -rf *.bak
 
 install: modules
 	$(MAKE) -C $(KDIR) M=$(PWD) INSTALL_MOD_DIR=extra/$(NAME) modules_install
