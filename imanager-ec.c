@@ -16,7 +16,6 @@
 #include <linux/byteorder/generic.h>
 #include <linux/module.h>
 #include <linux/swab.h>
-
 #include <ec.h>
 
 /**
@@ -42,9 +41,6 @@
  */
 #define EC_CMD_OFFSET_READ		0xA0UL
 #define EC_CMD_OFFSET_WRITE		0x50UL
-
-#define EC_FLAG_IO_18			BIT(0)
-#define EC_FLAG_IO_28			BIT(1)
 
 #define EC_STATUS_SUCCESS		BIT(0)
 #define EC_STATUS_CMD_COMPLETE		BIT(7)
@@ -206,18 +202,16 @@ struct ec_dyn_devtbl {
 	const struct ec_devtbl *devtbl; /* Device table Entry */
 };
 
-struct ec_data {
-	int	ioflag;
-	int	chipid;
-	u16	addr;
+struct imanager_data {
+	int (*read)(int cmd);
+	int (*write)(int cmd, int value);
 
 	struct ec_dyn_devtbl dyn[EC_MAX_DID];
 
-	struct ec_info	info;
-
+	struct imanager_ec_device		dev;
 	struct imanager_hwmon_device		sensors;
 	struct imanager_gpio_device		gpio;
-	struct imanager_smbus_device		smb;
+	struct imanager_i2c_device		i2c;
 	struct imanager_watchdog_device		wdt;
 	struct imanager_backlight_device	blc;
 };
@@ -235,7 +229,7 @@ enum ec_ram_type {
 	EC_RAM_EXT
 };
 
-static struct ec_data ec;
+static struct imanager_data ec;
 
 static const struct ec_devtbl devtbl[] = {
 	{ ALTGPIO0,	GPIO,	-1,	"gpio0" },
@@ -381,7 +375,7 @@ static inline void ec_outb(int addr, int reg, int val)
 	outb(val, addr + 1);
 }
 
-static inline int _ec_inb(int addr, int reg)
+static inline int ec_io28_inb(int addr, int reg)
 {
 	int ret;
 
@@ -401,7 +395,7 @@ static inline int _ec_inb(int addr, int reg)
 	return inb(addr - 1);
 }
 
-static inline int _ec_outb(int addr, int reg, int val)
+static inline int ec_io28_outb(int addr, int reg, int val)
 {
 	int ret;
 
@@ -420,33 +414,26 @@ static inline int _ec_outb(int addr, int reg, int val)
 	return 0;
 }
 
-static int ec_read(u8 cmd)
+static int ec_io18_read(int cmd)
 {
-	int ret;
-
-	if (ec.ioflag == EC_FLAG_IO_28)
-		ret = _ec_inb(IT8516_CMD_PORT, cmd + EC_CMD_OFFSET_READ);
-	else if (ec.ioflag == EC_FLAG_IO_18)
-		ret = ec_inb(IT8518_CMD_PORT, cmd);
-	else
-		ret = -EINVAL;
-
-	return ret;
+	return ec_inb(IT8518_CMD_PORT, cmd);
 }
 
-static int ec_write(u8 cmd, u8 value)
+static int ec_io18_write(int cmd, int value)
 {
-	int ret = 0;
+	ec_outb(IT8518_CMD_PORT, cmd, value);
 
-	if (ec.ioflag == EC_FLAG_IO_28)
-		ret = _ec_outb(IT8516_CMD_PORT, cmd + EC_CMD_OFFSET_WRITE,
-			       value);
-	else if (ec.ioflag == EC_FLAG_IO_18)
-		ec_outb(IT8518_CMD_PORT, cmd, value);
-	else
-		ret = -EINVAL;
+	return 0;
+}
 
-	return ret;
+static int ec_io28_read(int cmd)
+{
+	return ec_io28_inb(IT8516_CMD_PORT, cmd + EC_CMD_OFFSET_READ);
+}
+
+static int ec_io28_write(int cmd, int value)
+{
+	return ec_io28_outb(IT8516_CMD_PORT, cmd + EC_CMD_OFFSET_WRITE, value);
 }
 
 /* Prevent FW lock */
@@ -467,7 +454,7 @@ static int ec_wait_cmd_clear(void)
 	int i = 0;
 
 	do {
-		if (!ec_read(0))
+		if (!ec.read(0))
 			return 0;
 		imanager_delay();
 	} while (i++ < EC_MAX_RETRY);
@@ -489,21 +476,21 @@ static int ec_read_ram(u8 bank, u8 offset, u8 len, u8 *buf, u8 bufsz)
 	if (ret)
 		return ret;
 
-	ec_write(EC_MSG_OFFSET_PARAM, bank);
-	ec_write(EC_MSG_OFFSET_DATA(0), offset);
-	ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
-	ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
+	ec.write(EC_MSG_OFFSET_PARAM, bank);
+	ec.write(EC_MSG_OFFSET_DATA(0), offset);
+	ec.write(EC_MSG_OFFSET_DATA(0x2C), len);
+	ec.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
 
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
-	ret = ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec.read(EC_MSG_OFFSET_STATUS);
 	if (ret != EC_STATUS_SUCCESS)
 		return -EIO;
 
 	for (i = 0; (i < len) && (len < EC_MSG_SIZE) && (len <= bufsz); i++)
-		buf[i] = ec_read(EC_MSG_OFFSET_DATA(i + 1));
+		buf[i] = ec.read(EC_MSG_OFFSET_DATA(i + 1));
 
 	return 0;
 }
@@ -520,27 +507,27 @@ static int ec_write_ram(u8 bank, u8 offset, u8 len, u8 *buf)
 	if (ret)
 		return ret;
 
-	ec_write(EC_MSG_OFFSET_PARAM, bank);
-	ec_write(EC_MSG_OFFSET_DATA(0), offset);
-	ec_write(EC_MSG_OFFSET_DATA(0x2C), len);
+	ec.write(EC_MSG_OFFSET_PARAM, bank);
+	ec.write(EC_MSG_OFFSET_DATA(0), offset);
+	ec.write(EC_MSG_OFFSET_DATA(0x2C), len);
 
 	for (i = 0; (i < len) && (len < EC_MSG_SIZE); i++)
-		ec_write(EC_MSG_OFFSET_DATA(i + 1), buf[i]);
+		ec.write(EC_MSG_OFFSET_DATA(i + 1), buf[i]);
 
-	ec_write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
+	ec.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
 
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
-	ret = ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec.read(EC_MSG_OFFSET_STATUS);
 	if (ret != EC_STATUS_SUCCESS)
 		return -EIO;
 
 	return 0;
 }
 
-static int ec_read_dynamic_devtbl(struct ec_data *ec)
+static int ec_read_dynamic_devtbl(struct imanager_data *ec)
 {
 	u32 i, j;
 	int ret;
@@ -601,37 +588,37 @@ static int ec_read_buffer(u8 *data, int rlen)
 		return ret;
 
 	for (i = 0; i < pages; i++) {
-		ec_write(EC_MSG_OFFSET_PARAM, i);
-		ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
+		ec.write(EC_MSG_OFFSET_PARAM, i);
+		ec.write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
 
 		ret = ec_wait_cmd_clear();
 		if (ret)
 			return ret;
 
-		ret = ec_read(EC_MSG_OFFSET_STATUS);
+		ret = ec.read(EC_MSG_OFFSET_STATUS);
 		if (ret != EC_STATUS_SUCCESS)
 			return -EIO;
 
 		for (j = 0; j < EC_I2C_BLOCK_SIZE; j++)
 			data[i * EC_I2C_BLOCK_SIZE + j] =
-				ec_read(EC_MSG_OFFSET_DATA(j));
+				ec.read(EC_MSG_OFFSET_DATA(j));
 	}
 
 	if (remainder) {
-		ec_write(EC_MSG_OFFSET_PARAM, pages);
-		ec_write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
+		ec.write(EC_MSG_OFFSET_PARAM, pages);
+		ec.write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
 
 		ret = ec_wait_cmd_clear();
 		if (ret)
 			return ret;
 
-		ret = ec_read(EC_MSG_OFFSET_STATUS);
+		ret = ec.read(EC_MSG_OFFSET_STATUS);
 		if (ret != EC_STATUS_SUCCESS)
 			return -EIO;
 
 		for (j = 0; j < remainder; j++)
 			data[pages * EC_I2C_BLOCK_SIZE + j] =
-				ec_read(EC_MSG_OFFSET_DATA(j));
+				ec.read(EC_MSG_OFFSET_DATA(j));
 	}
 
 	return 0;
@@ -646,27 +633,27 @@ static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool pay
 	if (ret)
 		return ret;
 
-	ec_write(EC_MSG_OFFSET_PARAM, param);
+	ec.write(EC_MSG_OFFSET_PARAM, param);
 
 	if (msg && msg->wlen) {
 		if (!msg->data) {
 			for (i = 0; i < msg->wlen; i++)
-				ec_write(EC_MSG_OFFSET_DATA(i),
+				ec.write(EC_MSG_OFFSET_DATA(i),
 					msg->u.data[i]);
 		} else {
 			for (i = 0; i < msg->wlen; i++)
-				ec_write(EC_MSG_OFFSET_DATA(i), msg->data[i]);
-			ec_write(EC_MSG_OFFSET_DATA(0x2c), msg->wlen);
+				ec.write(EC_MSG_OFFSET_DATA(i), msg->data[i]);
+			ec.write(EC_MSG_OFFSET_DATA(0x2c), msg->wlen);
 		}
 	}
 
-	ec_write(EC_MSG_OFFSET_CMD, cmd);
+	ec.write(EC_MSG_OFFSET_CMD, cmd);
 	ret = ec_wait_cmd_clear();
 	if (ret)
 		return ret;
 
 	/* GPIO and I2C have different success return values */
-	ret = ec_read(EC_MSG_OFFSET_STATUS);
+	ret = ec.read(EC_MSG_OFFSET_STATUS);
 	if ((ret != EC_STATUS_SUCCESS) && !(ret & EC_STATUS_CMD_COMPLETE))
 		return -EIO;
 	/*
@@ -683,24 +670,18 @@ static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool pay
 	} else if (msg && msg->rlen) {
 		if (msg->rlen == 0xff)
 			/* Use alternate message body for hwmon */
-			len = ec_read(EC_MSG_OFFSET_DATA(0x2C));
+			len = ec.read(EC_MSG_OFFSET_DATA(0x2C));
 		else
 			len = (msg->rlen > EC_MSG_SIZE ? EC_MSG_SIZE :
 				msg->rlen);
 		offset = payload ? EC_MSG_OFFSET_PAYLOAD(0) :
 				EC_MSG_OFFSET_DATA(0);
 		for (i = 0; i < len; i++)
-			msg->u.data[i] = ec_read(offset + i);
+			msg->u.data[i] = ec.read(offset + i);
 	}
 
 	return 0;
 }
-
-const struct ec_info *imanager_get_fw_info(void)
-{
-	return &ec.info;
-}
-EXPORT_SYMBOL_GPL(imanager_get_fw_info);
 
 int imanager_msg_read(u8 cmd, u8 param, struct ec_message *msg)
 {
@@ -875,162 +856,7 @@ static inline void ec_get_dev_attr(struct ec_dev_attr *attr,
 	attr->label = tbl->devtbl->label;
 }
 
-static int ec_get_dev_adc(struct ec_data *ec)
-{
-	int i;
-	struct ec_dyn_devtbl *dyn;
-	struct dev_adc *adc = &ec->sensors.adc;
-
-	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
-		dyn = &ec->dyn[i];
-		if (dyn->did && (dyn->devtbl->type == ADC)) {
-			switch (dyn->did) {
-			case ADC12VS0:
-			case ADC12VS0x2:
-			case ADC12VS0x10:
-				ec_get_dev_attr(&adc->attr[0], dyn);
-				adc->num++;
-				break;
-			case ADC5VS5:
-			case ADC5VS5x2:
-			case ADC5VS5x10:
-				ec_get_dev_attr(&adc->attr[1], dyn);
-				adc->num++;
-				break;
-			case CMOSBAT:
-			case CMOSBATx2:
-			case CMOSBATx10:
-				ec_get_dev_attr(&adc->attr[2], dyn);
-				adc->num++;
-				break;
-			case VCOREA:
-			case ADC5VS0:
-			case ADC5VS0x2:
-			case ADC5VS0x10:
-				ec_get_dev_attr(&adc->attr[3], dyn);
-				adc->num++;
-				break;
-			case CURRENT:
-			case ADC33VS0:
-			case ADC33VS0x2:
-			case ADC33VS0x10:
-				ec_get_dev_attr(&adc->attr[4], dyn);
-				adc->num++;
-				break;
-			default:
-				pr_err("DID 0x%02X not handled\n", dyn->did);
-				return -EINVAL;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static int ec_get_dev_fan(struct ec_data *ec)
-{
-	int i;
-	struct ec_dyn_devtbl *dyn;
-	struct dev_fan *fan = &ec->sensors.fan;
-
-	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
-		dyn = &ec->dyn[i];
-		if (dyn->did && ((dyn->devtbl->type == TACH) || \
-				 (dyn->devtbl->type == PWM))) {
-			switch (dyn->did) {
-			case CPUFAN_2P:
-			case CPUFAN_4P:
-				ec_get_dev_attr(&fan->attr[0], dyn);
-				fan->num++;
-				break;
-			case SYSFAN1_2P:
-			case SYSFAN1_4P:
-				ec_get_dev_attr(&fan->attr[1], dyn);
-				fan->num++;
-				break;
-			case SYSFAN2_2P:
-			case SYSFAN2_4P:
-				ec_get_dev_attr(&fan->attr[2], dyn);
-				fan->num++;
-				break;
-			case TACHO0:
-			case TACHO1:
-			case TACHO2:
-			case BRIGHTNESS:
-			case BRIGHTNESS2:
-			case PCBEEP:
-				break;
-			default:
-				pr_err("DID 0x%02X not handled\n", dyn->did);
-				return -EINVAL;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static int ec_get_dev_hwmon(struct ec_data *ec)
-{
-	int ret;
-
-	ret = ec_get_dev_adc(ec);
-	if (ret < 0)
-		return ret;
-
-	ret = ec_get_dev_fan(ec);
-	if (ret < 0)
-		return ret;
-
-	ec->sensors.info = &ec->info;
-
-	return 0;
-}
-
-static int ec_get_dev_blc(struct ec_data *ec)
-{
-	int i;
-	struct ec_dyn_devtbl *dyn;
-	struct imanager_backlight_device *blc = &ec->blc;
-
-	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
-		dyn = &ec->dyn[i];
-		if (dyn->did && (dyn->devtbl->type == PWM)) {
-			switch (dyn->did) {
-			case BRIGHTNESS:
-				ec_get_dev_attr(&blc->attr[0], dyn);
-				blc->brightness[0] = EC_ACPIRAM_BRIGHTNESS1;
-				blc->num++;
-				break;
-			case BRIGHTNESS2:
-				ec_get_dev_attr(&blc->attr[1], dyn);
-				blc->brightness[1] = EC_ACPIRAM_BRIGHTNESS2;
-				blc->num++;
-				break;
-			case CPUFAN_2P:
-			case CPUFAN_4P:
-			case SYSFAN1_2P:
-			case SYSFAN1_4P:
-			case SYSFAN2_2P:
-			case SYSFAN2_4P:
-			case PCBEEP:
-			case TACHO0:
-			case TACHO1:
-			case TACHO2:
-				break;
-			default:
-				pr_err("DID 0x%02X not handled\n", dyn->did);
-				return -EINVAL;
-			}
-		}
-	}
-
-	blc->info = &ec->info;
-
-	return 0;
-}
-
-static int ec_get_dev_gpio(struct ec_data *ec)
+static int ec_get_dev_gpio(struct imanager_data *ec)
 {
 	int i;
 	struct ec_dyn_devtbl *dyn;
@@ -1097,30 +923,142 @@ static int ec_get_dev_gpio(struct ec_data *ec)
 		}
 	}
 
-	gpio->info = &ec->info;
+	gpio->info = &ec->dev.info;
 
 	return 0;
 }
 
-static int ec_get_dev_smb(struct ec_data *ec)
+static int ec_get_dev_adc(struct imanager_data *ec)
 {
 	int i;
 	struct ec_dyn_devtbl *dyn;
-	struct imanager_smbus_device *smb = &ec->smb;
+	struct dev_adc *adc = &ec->sensors.adc;
+
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == ADC)) {
+			switch (dyn->did) {
+			case ADC12VS0:
+			case ADC12VS0x2:
+			case ADC12VS0x10:
+				ec_get_dev_attr(&adc->attr[0], dyn);
+				adc->num++;
+				break;
+			case ADC5VS5:
+			case ADC5VS5x2:
+			case ADC5VS5x10:
+				ec_get_dev_attr(&adc->attr[1], dyn);
+				adc->num++;
+				break;
+			case CMOSBAT:
+			case CMOSBATx2:
+			case CMOSBATx10:
+				ec_get_dev_attr(&adc->attr[2], dyn);
+				adc->num++;
+				break;
+			case VCOREA:
+			case ADC5VS0:
+			case ADC5VS0x2:
+			case ADC5VS0x10:
+				ec_get_dev_attr(&adc->attr[3], dyn);
+				adc->num++;
+				break;
+			case CURRENT:
+			case ADC33VS0:
+			case ADC33VS0x2:
+			case ADC33VS0x10:
+				ec_get_dev_attr(&adc->attr[4], dyn);
+				adc->num++;
+				break;
+			default:
+				pr_err("DID 0x%02X not handled\n", dyn->did);
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
+static int ec_get_dev_fan(struct imanager_data *ec)
+{
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct dev_fan *fan = &ec->sensors.fan;
+
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && ((dyn->devtbl->type == TACH) || \
+				 (dyn->devtbl->type == PWM))) {
+			switch (dyn->did) {
+			case CPUFAN_2P:
+			case CPUFAN_4P:
+				ec_get_dev_attr(&fan->attr[0], dyn);
+				fan->num++;
+				break;
+			case SYSFAN1_2P:
+			case SYSFAN1_4P:
+				ec_get_dev_attr(&fan->attr[1], dyn);
+				fan->num++;
+				break;
+			case SYSFAN2_2P:
+			case SYSFAN2_4P:
+				ec_get_dev_attr(&fan->attr[2], dyn);
+				fan->num++;
+				break;
+			case TACHO0:
+			case TACHO1:
+			case TACHO2:
+			case BRIGHTNESS:
+			case BRIGHTNESS2:
+			case PCBEEP:
+				break;
+			default:
+				pr_err("DID 0x%02X not handled\n", dyn->did);
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
+static int ec_get_dev_hwmon(struct imanager_data *ec)
+{
+	int ret;
+
+	ret = ec_get_dev_adc(ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_fan(ec);
+	if (ret < 0)
+		return ret;
+
+	ec->sensors.ecdev = &ec->dev;
+
+	return 0;
+}
+
+static int ec_get_dev_i2c(struct imanager_data *ec)
+{
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_i2c_device *i2c = &ec->i2c;
 
 	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
 		dyn = &ec->dyn[i];
 		if (dyn->did && (dyn->devtbl->type == SMB)) {
 			switch (dyn->did) {
 			case SMBEEPROM:
-				ec_get_dev_attr(&smb->attr[0], dyn);
-				smb->smbeeprom = &smb->attr[0];
-				smb->num++;
+				ec_get_dev_attr(&i2c->attr[0], dyn);
+				i2c->eeprom = &i2c->attr[0];
+				i2c->num++;
 				break;
 			case I2COEM:
-				ec_get_dev_attr(&smb->attr[1], dyn);
-				smb->i2coem = &smb->attr[1];
-				smb->num++;
+				ec_get_dev_attr(&i2c->attr[1], dyn);
+				i2c->i2coem = &i2c->attr[1];
+				i2c->num++;
 				break;
 			case SMBOEM0:
 			case SMBOEM1:
@@ -1145,12 +1083,55 @@ static int ec_get_dev_smb(struct ec_data *ec)
 		}
 	}
 
-	smb->info = &ec->info;
+	i2c->ecdev = &ec->dev;
 
 	return 0;
 }
 
-static int ec_get_dev_wdt(struct ec_data *ec)
+static int ec_get_dev_blc(struct imanager_data *ec)
+{
+	int i;
+	struct ec_dyn_devtbl *dyn;
+	struct imanager_backlight_device *blc = &ec->blc;
+
+	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
+		dyn = &ec->dyn[i];
+		if (dyn->did && (dyn->devtbl->type == PWM)) {
+			switch (dyn->did) {
+			case BRIGHTNESS:
+				ec_get_dev_attr(&blc->attr[0], dyn);
+				blc->brightness[0] = EC_ACPIRAM_BRIGHTNESS1;
+				blc->num++;
+				break;
+			case BRIGHTNESS2:
+				ec_get_dev_attr(&blc->attr[1], dyn);
+				blc->brightness[1] = EC_ACPIRAM_BRIGHTNESS2;
+				blc->num++;
+				break;
+			case CPUFAN_2P:
+			case CPUFAN_4P:
+			case SYSFAN1_2P:
+			case SYSFAN1_4P:
+			case SYSFAN2_2P:
+			case SYSFAN2_4P:
+			case PCBEEP:
+			case TACHO0:
+			case TACHO1:
+			case TACHO2:
+				break;
+			default:
+				pr_err("DID 0x%02X not handled\n", dyn->did);
+				return -EINVAL;
+			}
+		}
+	}
+
+	blc->info = &ec->dev.info;
+
+	return 0;
+}
+
+static int ec_get_dev_wdt(struct imanager_data *ec)
 {
 	int i;
 	struct ec_dyn_devtbl *dyn;
@@ -1177,10 +1158,16 @@ static int ec_get_dev_wdt(struct ec_data *ec)
 		}
 	}
 
-	wdt->info = &ec->info;
+	wdt->info = &ec->dev.info;
 
 	return 0;
 }
+
+const struct imanager_ec_device *imanager_get_ec_device(void)
+{
+	return &ec.dev;
+};
+EXPORT_SYMBOL_GPL(imanager_get_ec_device);
 
 const struct imanager_hwmon_device *imanager_get_hwmon_device(void)
 {
@@ -1194,11 +1181,11 @@ const struct imanager_gpio_device *imanager_get_gpio_device(void)
 }
 EXPORT_SYMBOL_GPL(imanager_get_gpio_device);
 
-const struct imanager_smbus_device *imanager_get_smb_device(void)
+const struct imanager_i2c_device *imanager_get_i2c_device(void)
 {
-	return &ec.smb;
+	return &ec.i2c;
 }
-EXPORT_SYMBOL_GPL(imanager_get_smb_device);
+EXPORT_SYMBOL_GPL(imanager_get_i2c_device);
 
 const struct imanager_backlight_device *imanager_get_backlight_device(void)
 {
@@ -1211,15 +1198,6 @@ const struct imanager_watchdog_device *imanager_get_watchdog_device(void)
 	return &ec.wdt;
 }
 EXPORT_SYMBOL_GPL(imanager_get_watchdog_device);
-
-int imanager_get_chipid(void)
-{
-	if (!ec.chipid)
-		return -EINVAL;
-
-	return ec.chipid;
-}
-EXPORT_SYMBOL_GPL(imanager_get_chipid);
 
 static int ec_get_version(struct ec_version *version)
 {
@@ -1302,11 +1280,7 @@ static int ec_init(void)
 	if (ret)
 		return ret;
 
-	ret = ec_get_fw_info(&ec.info);
-	if (ret < 0)
-		return ret;
-
-	ret = ec_get_dev_hwmon(&ec);
+	ret = ec_get_fw_info(&ec.dev.info);
 	if (ret < 0)
 		return ret;
 
@@ -1314,7 +1288,11 @@ static int ec_init(void)
 	if (ret < 0)
 		return ret;
 
-	ret = ec_get_dev_smb(&ec);
+	ret = ec_get_dev_hwmon(&ec);
+	if (ret < 0)
+		return ret;
+
+	ret = ec_get_dev_i2c(&ec);
 	if (ret < 0)
 		return ret;
 
@@ -1331,30 +1309,30 @@ static int ec_init(void)
 
 int imanager_ec_probe(u16 addr)
 {
-	int chipid;
-	unsigned int ioflag;
+	int chipid = ec_read_chipid(addr);
 
 	memset((void *)&ec, 0, sizeof(ec));
 
-	chipid = ec_read_chipid(addr);
-
 	switch (chipid) {
-	case SIO_DEVID_IT8516:
+	case EC_DEVID_IT8516:
 		pr_err("EC IT8516 not supported\n");
+		ec.dev.id = IT8516;
 		return -ENODEV;
-	case SIO_DEVID_IT8518:
-		ioflag = EC_FLAG_IO_18;
+	case EC_DEVID_IT8518:
+		ec.read = ec_io18_read;
+		ec.write = ec_io18_write;
+		ec.dev.id = IT8518;
 		break;
-	case SIO_DEVID_IT8528:
-		ioflag = EC_FLAG_IO_28;
+	case EC_DEVID_IT8528:
+		ec.read = ec_io28_read;
+		ec.write = ec_io28_write;
+		ec.dev.id = IT8528;
 		break;
 	default:
 		return -ENODEV;
 	}
 
-	ec.chipid = chipid;
-	ec.addr   = addr;
-	ec.ioflag = ioflag;
+	ec.dev.addr = addr;
 
 	return ec_init();
 }

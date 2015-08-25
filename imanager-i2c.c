@@ -244,8 +244,6 @@ static int imanager_i2c_remove(struct platform_device *pdev)
 	i2c_del_adapter(&i2c->adapter);
 	i2c_set_adapdata(&i2c->adapter, NULL);
 
-	i2c_core_release();
-
 	return 0;
 }
 

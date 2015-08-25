@@ -67,11 +67,11 @@ imanager_hwmon_update_device(struct device *dev)
 	    || !data->valid) {
 		/* Measured voltages */
 		for (i = 0; i < data->adc_num; i++)
-			hwm_core_get_adc(i, &data->hwm.volt[i]);
+			hwm_core_adc_get_value(i, &data->hwm.volt[i]);
 
 		/* Measured fan speeds */
 		for (i = 0; i < data->fan_num; i++)
-			hwm_core_get_fan_ctrl(i, &data->hwm.fan[i]);
+			hwm_core_fan_get_ctrl(i, &data->hwm.fan[i]);
 
 		data->last_updated = jiffies;
 		data->valid = true;
@@ -340,8 +340,8 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_rpm(index - 1, val, rpm->max);
-	hwm_core_get_fan_ctrl(index - 1, fan); /* update */
+	hwm_core_fan_set_rpm_limit(index - 1, val, rpm->max);
+	hwm_core_fan_get_ctrl(index - 1, fan); /* update */
 
 	mutex_unlock(&data->ec->lock);
 
@@ -367,8 +367,8 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_rpm(index - 1, rpm->min, val);
-	hwm_core_get_fan_ctrl(index - 1, fan);
+	hwm_core_fan_set_rpm_limit(index - 1, rpm->min, val);
+	hwm_core_fan_get_ctrl(index - 1, fan);
 
 	mutex_unlock(&data->ec->lock);
 
@@ -403,13 +403,13 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 
 	switch (fan->mode) {
 	case MODE_MANUAL:
-		hwm_core_set_fan_ctrl(index - 1, MODE_MANUAL, CTRL_PWM,
+		hwm_core_fan_set_ctrl(index - 1, MODE_MANUAL, CTRL_PWM,
 				      val, 0, NULL, NULL);
 		break;
 	case MODE_AUTO:
 		if (fan->type == CTRL_RPM)
 			break;
-		hwm_core_set_fan_ctrl(index - 1, MODE_AUTO, CTRL_PWM,
+		hwm_core_fan_set_ctrl(index - 1, MODE_AUTO, CTRL_PWM,
 				      val, 0, &fan->limit, &fan->alert);
 		break;
 	}
@@ -470,17 +470,17 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 	switch (mode) {
 	case 0:
 		if (mode != 0)
-			hwm_core_set_fan_ctrl(nr, MODE_FULL, CTRL_PWM, 100,
+			hwm_core_fan_set_ctrl(nr, MODE_FULL, CTRL_PWM, 100,
 					      fan->pulse, NULL, NULL);
 		break;
 	case 1:
 		if (mode != 1)
-			hwm_core_set_fan_ctrl(nr, MODE_MANUAL, CTRL_PWM, 0,
+			hwm_core_fan_set_ctrl(nr, MODE_MANUAL, CTRL_PWM, 0,
 					      fan->pulse, NULL, NULL);
 		break;
 	case 2:
 		if (mode != 2)
-			hwm_core_set_fan_ctrl(nr, MODE_AUTO, fan->type, 0,
+			hwm_core_fan_set_ctrl(nr, MODE_AUTO, fan->type, 0,
 					      fan->pulse, &fan->limit, NULL);
 		break;
 	}
@@ -520,7 +520,7 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_ctrl(nr, fan->mode, val ? CTRL_RPM : CTRL_PWM,
+	hwm_core_fan_set_ctrl(nr, fan->mode, val ? CTRL_RPM : CTRL_PWM,
 			      fan->pwm, fan->pulse, &fan->limit, &fan->alert);
 
 	mutex_unlock(&data->ec->lock);
@@ -589,8 +589,8 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_temp(nr, val, val, temp->max);
-	hwm_core_get_fan_ctrl(nr, fan);
+	hwm_core_fan_set_temp_limit(nr, val, val, temp->max);
+	hwm_core_fan_get_ctrl(nr, fan);
 
 	mutex_unlock(&data->ec->lock);
 
@@ -621,8 +621,8 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_temp(nr, temp->stop, temp->min, val);
-	hwm_core_get_fan_ctrl(nr, fan);
+	hwm_core_fan_set_temp_limit(nr, temp->stop, temp->min, val);
+	hwm_core_fan_get_ctrl(nr, fan);
 
 	mutex_unlock(&data->ec->lock);
 
@@ -648,7 +648,7 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_pwm(index - 1, val, pwm->max);
+	hwm_core_fan_set_pwm_limit(index - 1, val, pwm->max);
 
 	mutex_unlock(&data->ec->lock);
 
@@ -674,7 +674,7 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->ec->lock);
 
-	hwm_core_set_fan_limit_pwm(index - 1, pwm->min, val);
+	hwm_core_fan_set_pwm_limit(index - 1, pwm->min, val);
 
 	mutex_unlock(&data->ec->lock);
 
@@ -686,7 +686,7 @@ show_in_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int index = to_sensor_dev_attr(attr)->index;
 
-	return sprintf(buf, "%s\n", hwm_core_get_adc_label(index));
+	return sprintf(buf, "%s\n", hwm_core_adc_get_label(index));
 }
 
 static ssize_t
@@ -694,7 +694,7 @@ show_temp_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int index = to_sensor_dev_attr(attr)->index;
 
-	return sprintf(buf, "%s\n", hwm_core_get_fan_temp_label(index - 1));
+	return sprintf(buf, "%s\n", hwm_core_fan_get_temp_label(index - 1));
 }
 
 static ssize_t
@@ -702,7 +702,7 @@ show_fan_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int index = to_sensor_dev_attr(attr)->index;
 
-	return sprintf(buf, "%s\n", hwm_core_get_fan_label(index - 1));
+	return sprintf(buf, "%s\n", hwm_core_fan_get_label(index - 1));
 }
 
 /*
@@ -811,7 +811,7 @@ static struct attribute *imanager_in_attributes[] = {
 	&sensor_dev_attr_in2_max.dev_attr.attr,
 	&sensor_dev_attr_in2_alarm.dev_attr.attr,
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	&dev_attr_name.attr,
 #endif
 	NULL
@@ -827,7 +827,7 @@ imanager_in_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 	int err;
 
 	if ((index >= 0) && (index <= 14)) { /* vin */
-		err = hwm_core_check_adc(index / 5);
+		err = hwm_core_adc_is_available(index / 5);
 		if (err < 0)
 			return 0;
 	}
@@ -863,17 +863,15 @@ static umode_t
 imanager_other_is_visible(struct kobject *kobj,
 			  struct attribute *attr, int index)
 {
-	int err;
+	int ret = hwm_core_adc_get_max_count();
 
-	if ((index >= 0) && (index <= 7)) { /* current */
-		err = hwm_core_check_adc(4);
-		if (err < 0)
-			return 0;
-	} else if (index == 8) { /* vid */
-		err = hwm_core_check_adc(3);
-		if (err < 0)
-			return 0;
-	}
+	/*
+	 * There are either 3 or 5 VINs
+	 * vin3 is current monitoring
+	 * vin4 is CPU VID
+	 */
+	if (ret < 5)
+		return 0;
 
 	return attr->mode;
 }
@@ -951,15 +949,15 @@ imanager_fan_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 	int err;
 
 	if ((index >= 0) && (index <= 14)) { /* fan */
-		err = hwm_core_check_fan(index / 5);
+		err = hwm_core_fan_is_available(index / 5);
 		if (err < 0)
 			return 0;
 	} else if ((index >= 15) && (index <= 29)) { /* temp */
-		err = hwm_core_check_fan((index - 15) / 5);
+		err = hwm_core_fan_is_available((index - 15) / 5);
 		if (err < 0)
 			return 0;
 	} else if ((index >= 30) && (index <= 34)) { /* pwm */
-		err = hwm_core_check_fan((index - 30) / 5);
+		err = hwm_core_fan_is_available((index - 30) / 5);
 		if (err < 0)
 			return 0;
 	}
@@ -1002,19 +1000,14 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	data->ec = ec;
 	platform_set_drvdata(pdev, data);
 
-	for (i = 0; i < HWM_MAX_ADC; i++)
-		if (!hwm_core_check_adc(i))
-			data->adc_num++;
+	data->adc_num = hwm_core_adc_get_max_count();
+	data->fan_num = hwm_core_fan_get_max_count();
 
-	for (i = 0; i < HWM_MAX_FAN; i++) {
-		if (!hwm_core_check_fan(i)) {
-			/* set active fan to automatic speed control */
-			hwm_core_set_fan_ctrl(i, MODE_AUTO, CTRL_RPM, 0, 0,
-					      NULL, NULL);
-			hwm_core_get_fan_ctrl(i, &data->hwm.fan[i]);
-			if (data->hwm.fan[i].temp != 0)
-				data->fan_num++;
-		}
+	for (i = 0; i < data->fan_num; i++) {
+		/* set active fan to automatic speed control */
+		hwm_core_fan_set_ctrl(i, MODE_AUTO, CTRL_RPM, 0, 0,
+				      NULL, NULL);
+		hwm_core_fan_get_ctrl(i, &data->hwm.fan[i]);
 	}
 
 	data->groups[num_attr_groups++] = &imanager_group_in;
@@ -1025,7 +1018,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	if (data->fan_num)
 		data->groups[num_attr_groups++] = &imanager_group_fan;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	err = sysfs_create_groups(&dev->kobj, data->groups);
 	if (err < 0)
 		return err;
@@ -1052,7 +1045,6 @@ static int imanager_hwmon_remove(struct platform_device *pdev)
 
 	hwmon_device_unregister(data->hwmon_dev);
 	sysfs_remove_groups(&pdev->dev.kobj, data->groups);
-	hwm_core_release();
 
 	return 0;
 }

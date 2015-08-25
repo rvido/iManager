@@ -18,18 +18,14 @@
 #include <linux/types.h>
 #include <ec.h>
 
-enum chips { IT8516, IT8518, IT8528 };
-
 struct imanager_platform_data {
-	const struct ec_info *info;
+	const struct imanager_ec_device *dev;
+	const char *chip_name;
 };
 
 struct imanager_device_data {
-	enum chips	type;
-	u16		addr;
-	const char	*name;
-	struct device	*dev;
-	struct mutex	lock;
+	struct device *dev;
+	struct mutex  lock;
 };
 
 #endif

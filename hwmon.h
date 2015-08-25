@@ -98,24 +98,24 @@ enum fan_mode {
 };
 
 int hwm_core_init(void);
-void hwm_core_release(void);
 
-int hwm_core_check_adc(int num);
-int hwm_core_check_fan(int num);
+int hwm_core_adc_is_available(int num);
+int hwm_core_adc_get_max_count(void);
+int hwm_core_adc_get_value(int num, struct hwm_voltage *volt);
+const char * hwm_core_adc_get_label(int num);
 
-int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan);
-int hwm_core_set_fan_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
+int hwm_core_fan_is_available(int num);
+int hwm_core_fan_get_max_count(void);
+int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan);
+int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 			  struct hwm_sensors_limit *limit,
 			  struct hwm_fan_alert *alert);
 
-int hwm_core_set_fan_limit_rpm(int num, int min, int max);
-int hwm_core_set_fan_limit_pwm(int num, int min, int max);
-int hwm_core_set_fan_limit_temp(int num, int stop, int min, int max);
+int hwm_core_fan_set_rpm_limit(int num, int min, int max);
+int hwm_core_fan_set_pwm_limit(int num, int min, int max);
+int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max);
 
-int hwm_core_get_adc(int num, struct hwm_voltage *volt);
-
-const char * hwm_core_get_adc_label(int num);
-const char * hwm_core_get_fan_label(int num);
-const char * hwm_core_get_fan_temp_label(int num);
+const char * hwm_core_fan_get_label(int num);
+const char * hwm_core_fan_get_temp_label(int num);
 
 #endif

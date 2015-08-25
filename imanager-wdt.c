@@ -315,7 +315,6 @@ unregister_driver:
 static int imanager_wdt_remove(struct platform_device *pdev)
 {
 	wdt_core_disable_all();
-	wdt_core_release();
 
 	watchdog_unregister_device(&imanager_wdt_dev);
 	platform_set_drvdata(pdev, NULL);

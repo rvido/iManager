@@ -99,7 +99,7 @@ static const struct backlight_ops imanager_bl_ops = {
 };
 
 static int imanager_backlight_init(struct device *dev,
-				 struct imanager_backlight_data *data)
+				   struct imanager_backlight_data *data)
 {
 	struct backlight_device *bd;
 	struct backlight_properties props;
@@ -190,7 +190,6 @@ static int imanager_backlight_remove(struct platform_device *pdev)
 	struct imanager_backlight_data *data = dev_get_drvdata(dev);
 
 	backlight_device_unregister(data->bl);
-	bl_core_release();
 
 	return 0;
 }

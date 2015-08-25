@@ -25,7 +25,6 @@ enum wdt_event {
 };
 
 int wdt_core_init(void);
-void wdt_core_release(void);
 
 int wdt_core_set_timeout(enum wdt_event type, u32 timeout);
 

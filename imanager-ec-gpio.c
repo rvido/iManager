@@ -37,7 +37,7 @@ int gpio_core_get_state(u32 num)
 {
 	int ret;
 
-	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
+	if (WARN_ON(num >= dev->num))
 		return -EINVAL;
 
 	ret = imanager_read_byte(EC_CMD_HWP_RD, dev->attr[num].did);
@@ -51,7 +51,7 @@ int gpio_core_set_state(u32 num, u32 state)
 {
 	int ret;
 
-	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
+	if (WARN_ON(num >= dev->num))
 		return -EINVAL;
 
 	ret = imanager_write_byte(EC_CMD_HWP_WR, dev->attr[num].did,
@@ -68,7 +68,7 @@ int gpio_core_set_direction(u32 num, u32 dir)
 {
 	int ret;
 
-	if (WARN_ON(num >= EC_GPIO_MAX_NUM))
+	if (WARN_ON(num >= dev->num))
 		return -EINVAL;
 
 	ret = imanager_write_byte(EC_CMD_GPIO_DIR_WR, dev->attr[num].did,
@@ -82,6 +82,14 @@ int gpio_core_set_direction(u32 num, u32 dir)
 	return 0;
 }
 
+int gpio_core_get_max_count(void)
+{
+	if (WARN_ON(!dev))
+		return -ENODEV;
+
+	return dev->num;
+}
+
 int gpio_core_init(void)
 {
 	dev = imanager_get_gpio_device();
@@ -89,9 +97,5 @@ int gpio_core_init(void)
 		return -ENODEV;
 
 	return 0;
-}
-
-void gpio_core_release(void)
-{
 }
 

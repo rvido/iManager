@@ -316,61 +316,59 @@ static int hwm_core_set_fan_alert_limit(int fnum,
 
 /* HWM CORE API */
 
-const char * hwm_core_get_adc_label(int num)
+const char * hwm_core_adc_get_label(int num)
 {
-	if (WARN_ON(num >= EC_HWM_MAX_ADC))
+	if (WARN_ON(!dev && num >= dev->adc.num))
 		return NULL;
 
 	return dev->adc.attr[num].label;
 }
 
-const char * hwm_core_get_fan_label(int num)
+const char * hwm_core_fan_get_label(int num)
 {
-	if (WARN_ON(num >= HWM_MAX_FAN))
+	if (WARN_ON(!dev && num >= dev->fan.num))
 		return NULL;
 
 	return dev->fan.attr[num].label;
 }
 
-const char * hwm_core_get_fan_temp_label(int num)
+const char * hwm_core_fan_get_temp_label(int num)
 {
-	int ret;
-
-	if (WARN_ON(num >= HWM_MAX_FAN))
+	if (WARN_ON(!dev && num >= dev->fan.num))
 		return NULL;
 
-	ret = hwm_core_check_fan(num);
-
-	return ret ? NULL : fan_temp_label[num];
+	return fan_temp_label[num];
 }
 
-int hwm_core_check_adc(int num)
+int hwm_core_adc_is_available(int num)
 {
-	if (WARN_ON(num >= HWM_MAX_ADC))
-		return -EINVAL;
+	if (WARN_ON(!dev && num >= dev->adc.num))
+		return -ENODEV;
 
 	return dev->adc.attr[num].did ? 0 : -ENODEV;
 }
 
-int hwm_core_get_adc(int num, struct hwm_voltage *volt)
+int hwm_core_adc_get_value(int num, struct hwm_voltage *volt)
 {
 	int ret;
 
-	if (!hwm_core_check_adc(num)) {
-		ret = hwm_get_adc_value(dev->adc.attr[num].did);
-		if (ret < 0)
-			return ret;
-		volt->value = ret * dev->adc.attr[num].scale;
-		volt->valid = true;
-	}
-	else {
-		volt->valid = false;
-	}
+	volt->valid = false;
+
+	ret = hwm_core_adc_is_available(num);
+	if (ret < 0)
+		return ret;
+
+	ret = hwm_get_adc_value(dev->adc.attr[num].did);
+	if (ret < 0)
+		return ret;
+
+	volt->value = ret * dev->adc.attr[num].scale;
+	volt->valid = true;
 
 	return 0;
 }
 
-int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan)
+int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan)
 {
 	int ret;
 	struct fan_dev_config cfg;
@@ -380,10 +378,6 @@ int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan)
 		return -EINVAL;
 
 	fan->valid = false;
-
-	ret = hwm_core_check_fan(num);
-	if (ret < 0)
-		return ret;
 
 	memset(fan, 0, sizeof(struct hwm_smartfan));
 
@@ -436,7 +430,7 @@ int hwm_core_get_fan_ctrl(int num, struct hwm_smartfan *fan)
 	return 0;
 }
 
-int hwm_core_set_fan_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
+int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 			  struct hwm_sensors_limit *limit,
 			  struct hwm_fan_alert *alert)
 {
@@ -510,9 +504,9 @@ int hwm_core_set_fan_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 	return 0;
 }
 
-int hwm_core_check_fan(int fnum)
+int hwm_core_fan_is_available(int num)
 {
-	return dev->fan.attr[fnum].did ? 0 : -ENODEV;
+	return dev->fan.attr[num].did ? 0 : -ENODEV;
 }
 
 static int hwm_core_set_fan_limit(int num, int fan_limit,
@@ -548,7 +542,7 @@ static int hwm_core_set_fan_limit(int num, int fan_limit,
 	return hwm_write_fan_config(num, &cfg);
 }
 
-int hwm_core_set_fan_limit_rpm(int num, int min, int max)
+int hwm_core_fan_set_rpm_limit(int num, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.rpm = {
@@ -560,7 +554,7 @@ int hwm_core_set_fan_limit_rpm(int num, int min, int max)
 	return hwm_core_set_fan_limit(num, LIMIT_RPM, &limit);
 }
 
-int hwm_core_set_fan_limit_pwm(int num, int min, int max)
+int hwm_core_fan_set_pwm_limit(int num, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.pwm = {
@@ -572,7 +566,7 @@ int hwm_core_set_fan_limit_pwm(int num, int min, int max)
 	return hwm_core_set_fan_limit(num, LIMIT_PWM, &limit);
 }
 
-int hwm_core_set_fan_limit_temp(int num, int stop, int min, int max)
+int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max)
 {
 	struct hwm_sensors_limit limit = {
 		.temp = {
@@ -585,17 +579,28 @@ int hwm_core_set_fan_limit_temp(int num, int stop, int min, int max)
 	return hwm_core_set_fan_limit(num, LIMIT_TEMP, &limit);
 }
 
+int hwm_core_adc_get_max_count(void)
+{
+	if (!dev)
+		return -ENODEV;
+
+	return dev->adc.num;
+}
+
+int hwm_core_fan_get_max_count(void)
+{
+	if (!dev)
+		return -ENODEV;
+
+	return dev->fan.num;
+}
+
 int hwm_core_init(void)
 {
 	dev = imanager_get_hwmon_device();
-	if (!dev) {
-		hwm_core_release();
+	if (!dev)
 		return -ENODEV;
-	}
 
 	return 0;
 }
 
-void hwm_core_release(void)
-{
-}

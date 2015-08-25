@@ -26,7 +26,6 @@ enum backlight_unit {
 };
 
 int bl_core_init(void);
-void bl_core_release(void);
 
 int bl_core_get_backlight_ctrl(u32 unit);
 int bl_core_set_backlight_ctrl(u32 unit, bool enable);

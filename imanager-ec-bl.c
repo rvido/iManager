@@ -310,7 +310,3 @@ int bl_core_init(void)
 	return 0;
 }
 
-void bl_core_release(void)
-{
-}
-

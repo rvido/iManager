@@ -39,7 +39,7 @@ struct ec_i2c_status {
 	u32 complete	: 1;
 };
 
-static const struct imanager_smbus_device *dev;
+static const struct imanager_i2c_device *i2c;
 
 static int i2c_core_eval_status(u8 _status)
 {
@@ -93,7 +93,7 @@ static int i2c_core_blk_wr_rw_combined(u8 proto, struct ec_message *msg)
 	if (err)
 		return err;
 
-	err = i2c_send_message(proto, dev->i2coem->did, msg);
+	err = i2c_send_message(proto, i2c->i2coem->did, msg);
 	if (err)
 		return err;
 
@@ -368,14 +368,13 @@ int i2c_core_smb_get_freq(u32 bus_id)
 {
 	int val = 0, f;
 	int freq_id, freq;
-	int chipid = imanager_get_chipid();
 
 	if (WARN_ON(bus_id > I2C_OEM_1))
 		return -EINVAL;
 
-	switch (chipid) {
-	case SIO_DEVID_IT8518:
-	case SIO_DEVID_IT8528:
+	switch (i2c->ecdev->id) {
+	case EC_DEVID_IT8518:
+	case EC_DEVID_IT8528:
 		val = imanager_read_word(EC_CMD_SMB_FREQ_RD,
 					 EC_SMB_DID(bus_id));
 		if (val < 0) {
@@ -414,14 +413,13 @@ int i2c_core_smb_set_freq(u32 bus_id, u32 freq)
 {
 	int err;
 	u16 val;
-	int chipid = imanager_get_chipid();
 
 	if (WARN_ON(bus_id > I2C_OEM_1))
 		return -EINVAL;
 
-	switch (chipid) {
-	case SIO_DEVID_IT8518:
-	case SIO_DEVID_IT8528:
+	switch (i2c->ecdev->id) {
+	case EC_DEVID_IT8518:
+	case EC_DEVID_IT8528:
 		switch (freq) {
 		case 50:
 			val = 0x0100;
@@ -457,14 +455,10 @@ int i2c_core_smb_set_freq(u32 bus_id, u32 freq)
 
 int i2c_core_init(void)
 {
-	dev = imanager_get_smb_device();
-	if (!dev)
+	i2c = imanager_get_i2c_device();
+	if (!i2c)
 		return -ENODEV;
 
 	return 0;
-}
-
-void i2c_core_release(void)
-{
 }
 

@@ -138,7 +138,7 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	chip->label	= "imanager_gpio";
 
 	chip->base	= -1;
-	chip->ngpio	= EC_MAX_GPIO;
+	chip->ngpio	= gpio_core_get_max_count();
 
 	chip->get	= imanager_get;
 	chip->set	= imanager_set;
@@ -151,7 +151,6 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	err = gpiochip_add(chip);
 	if (err < 0) {
 		dev_err(dev, "Failed to register driver\n");
-		gpio_core_release();
 		return err;
 	}
 
@@ -170,8 +169,6 @@ static int imanager_remove(struct platform_device *pdev)
 #else
 	gpiochip_remove(&data->chip);
 #endif
-
-	gpio_core_release();
 
 	return 0;
 }

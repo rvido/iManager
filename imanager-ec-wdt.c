@@ -165,6 +165,3 @@ int wdt_core_init(void)
 	return 0;
 }
 
-void wdt_core_release(void)
-{
-}

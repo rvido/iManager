@@ -31,7 +31,6 @@ enum smb_bus_id {
 };
 
 int i2c_core_init(void);
-void i2c_core_release(void);
 
 int i2c_core_write_quick(u16 addr);
 

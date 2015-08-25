@@ -16,14 +16,9 @@
 #include <linux/gpio.h>
 #include <linux/types.h>
 
-/*
- * EC FW supports 8-bit GPIO.
- */
-#define EC_MAX_GPIO	8
-
 int gpio_core_init(void);
-void gpio_core_release(void);
 
+int gpio_core_get_max_count(void);
 int gpio_core_get_state(u32 gpio);
 int gpio_core_set_state(u32 gpio, u32 state);
 int gpio_core_set_direction(u32 gpio, u32 dir);
