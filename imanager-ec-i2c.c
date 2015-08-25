@@ -373,8 +373,8 @@ int i2c_core_smb_get_freq(u32 bus_id)
 		return -EINVAL;
 
 	switch (i2c->ecdev->id) {
-	case EC_DEVID_IT8518:
-	case EC_DEVID_IT8528:
+	case IT8518:
+	case IT8528:
 		val = imanager_read_word(EC_CMD_SMB_FREQ_RD,
 					 EC_SMB_DID(bus_id));
 		if (val < 0) {
@@ -418,8 +418,8 @@ int i2c_core_smb_set_freq(u32 bus_id, u32 freq)
 		return -EINVAL;
 
 	switch (i2c->ecdev->id) {
-	case EC_DEVID_IT8518:
-	case EC_DEVID_IT8528:
+	case IT8518:
+	case IT8528:
 		switch (freq) {
 		case 50:
 			val = 0x0100;
