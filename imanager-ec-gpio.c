@@ -84,9 +84,6 @@ int gpio_core_set_direction(u32 num, u32 dir)
 
 int gpio_core_get_max_count(void)
 {
-	if (WARN_ON(!dev))
-		return -ENODEV;
-
 	return dev->num;
 }
 

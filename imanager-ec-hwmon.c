@@ -581,17 +581,11 @@ int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max)
 
 int hwm_core_adc_get_max_count(void)
 {
-	if (!dev)
-		return -ENODEV;
-
 	return dev->adc.num;
 }
 
 int hwm_core_fan_get_max_count(void)
 {
-	if (!dev)
-		return -ENODEV;
-
 	return dev->fan.num;
 }
 

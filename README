@@ -29,7 +29,7 @@ from the message and then hand-off to the caller (sub-driver).
     Datasheet: Available from ITE upon request
   * Advantech EC based on ITE IT8528
     Prefix: imanager
-    Addresses: 0x0299/0x29a
+    Addresses: 0x0299/0x029a
     Datasheet: Available from ITE upon request
 
 This driver depends on mfd-core

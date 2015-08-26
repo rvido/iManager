@@ -110,17 +110,17 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	struct imanager_device_data *ec = dev_get_drvdata(dev->parent);
 	struct imanager_gpio_data *data;
 	struct gpio_chip *chip;
-	int err;
+	int ret;
 
 	if (!ec) {
 		dev_err(dev, "Invalid platform data\n");
 		return -EINVAL;
 	}
 
-	err = gpio_core_init();
-	if (err) {
+	ret = gpio_core_init();
+	if (ret) {
 		dev_err(dev, "Failed initializing GPIO core\n");
-		return -EIO;
+		return ret;
 	}
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
@@ -148,10 +148,10 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	chip->direction_input  = imanager_direction_in;
 	chip->direction_output = imanager_direction_out;
 
-	err = gpiochip_add(chip);
-	if (err < 0) {
+	ret = gpiochip_add(chip);
+	if (ret < 0) {
 		dev_err(dev, "Failed to register driver\n");
-		return err;
+		return ret;
 	}
 
 	return 0;
