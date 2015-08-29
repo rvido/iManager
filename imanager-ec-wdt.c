@@ -43,7 +43,7 @@ struct wdt_event_delay {
 		dummy;
 };
 
-static const struct imanager_watchdog_device *dev;
+static const struct imanager_watchdog_device *wd;
 
 static inline int set_timer(enum wdt_ctrl ctrl)
 {
@@ -158,8 +158,8 @@ int wdt_core_disable_all(void)
 
 int wdt_core_init(void)
 {
-	dev = imanager_get_watchdog_device();
-	if (!dev)
+	wd = imanager_get_watchdog_device();
+	if (!wd)
 		return -ENODEV;
 
 	return 0;

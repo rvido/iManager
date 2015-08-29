@@ -31,16 +31,16 @@
  *
  */
 
-static const struct imanager_gpio_device *dev;
+static const struct imanager_gpio_device *gpio;
 
 int gpio_core_get_state(u32 num)
 {
 	int ret;
 
-	if (WARN_ON(num >= dev->num))
+	if (WARN_ON(num >= gpio->num))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_HWP_RD, dev->attr[num].did);
+	ret = imanager_read_byte(EC_CMD_HWP_RD, gpio->attr[num].did);
 	if (ret < 0)
 		pr_err("Failed to get GPIO pin state (%x)\n", num);
 
@@ -51,10 +51,10 @@ int gpio_core_set_state(u32 num, u32 state)
 {
 	int ret;
 
-	if (WARN_ON(num >= dev->num))
+	if (WARN_ON(num >= gpio->num))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_HWP_WR, dev->attr[num].did,
+	ret = imanager_write_byte(EC_CMD_HWP_WR, gpio->attr[num].did,
 			    state ? EC_GPIOF_HIGH : EC_GPIOF_LOW);
 	if (ret) {
 		pr_err("Failed to set GPIO pin state (%x)\n", num);
@@ -68,10 +68,10 @@ int gpio_core_set_direction(u32 num, u32 dir)
 {
 	int ret;
 
-	if (WARN_ON(num >= dev->num))
+	if (WARN_ON(num >= gpio->num))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_GPIO_DIR_WR, dev->attr[num].did,
+	ret = imanager_write_byte(EC_CMD_GPIO_DIR_WR, gpio->attr[num].did,
 			    dir ? EC_GPIOF_DIR_IN : EC_GPIOF_DIR_OUT);
 	if (ret) {
 		pr_err("Failed to set GPIO direction (%x, '%s')\n", num,
@@ -84,13 +84,13 @@ int gpio_core_set_direction(u32 num, u32 dir)
 
 int gpio_core_get_max_count(void)
 {
-	return dev->num;
+	return gpio->num;
 }
 
 int gpio_core_init(void)
 {
-	dev = imanager_get_gpio_device();
-	if (!dev)
+	gpio = imanager_get_gpio_device();
+	if (!gpio)
 		return -ENODEV;
 
 	return 0;

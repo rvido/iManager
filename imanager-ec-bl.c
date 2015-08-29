@@ -29,7 +29,7 @@ struct backlight_ctrl {
 		dnc	: 5;	/* Do Not Care		    - bit [7..3] */
 };
 
-static const struct imanager_backlight_device *dev;
+static const struct imanager_backlight_device *bl;
 
 int bl_core_get_pwm_pulse_width(u32 unit)
 {
@@ -38,7 +38,7 @@ int bl_core_get_pwm_pulse_width(u32 unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_HWP_RD, dev->attr[unit].did);
+	ret = imanager_read_byte(EC_CMD_HWP_RD, bl->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM value of BLC%d\n", unit);
 
@@ -54,7 +54,7 @@ int bl_core_set_pwm_pulse_width(u32 unit, u32 pwm)
 
 	pwm = pwm > 100 ? 100 : pwm;
 
-	ret = imanager_write_byte(EC_CMD_HWP_WR, dev->attr[unit].did, pwm);
+	ret = imanager_write_byte(EC_CMD_HWP_WR, bl->attr[unit].did, pwm);
 	if (ret < 0)
 		pr_err("Failed writing PWM value '%d' of BLC%d\n",
 			pwm, unit);
@@ -69,7 +69,7 @@ int bl_core_get_pwm_frequency(u32 unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_word(EC_CMD_PWM_FREQ_RD, dev->attr[unit].did);
+	ret = imanager_read_word(EC_CMD_PWM_FREQ_RD, bl->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM frequency of BLC%d\n", unit);
 
@@ -85,7 +85,7 @@ int bl_core_set_pwm_frequency(u32 unit, u16 freq)
 
 	freq = freq < 10 ? 10 : freq;
 
-	ret = imanager_write_word(EC_CMD_PWM_FREQ_WR, dev->attr[unit].did,
+	ret = imanager_write_word(EC_CMD_PWM_FREQ_WR, bl->attr[unit].did,
 				  freq);
 	if (ret < 0)
 		pr_err("Failed writing PWM frequency (%d) of BLC%d\n",
@@ -101,7 +101,7 @@ int bl_core_set_brightness_polarity2(u32 unit, u32 polarity)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_write_byte(EC_CMD_PWM_POL_WR, dev->attr[unit].did,
+	ret = imanager_write_byte(EC_CMD_PWM_POL_WR, bl->attr[unit].did,
 				  polarity);
 	if (ret < 0)
 		pr_err("Failed writing PWM polarity of BLC%d\n", unit);
@@ -116,7 +116,7 @@ int bl_core_get_brightness_polarity2(u32 unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_read_byte(EC_CMD_PWM_POL_RD, dev->attr[unit].did);
+	ret = imanager_read_byte(EC_CMD_PWM_POL_RD, bl->attr[unit].did);
 	if (ret < 0)
 		pr_err("Failed reading PWM polarity value of BLC%d\n", unit);
 
@@ -132,7 +132,7 @@ int bl_core_get_backlight_level(u32 unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(dev->attr[unit].did);
+	ret = imanager_acpiram_read_byte(bl->attr[unit].did);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
@@ -153,7 +153,7 @@ int bl_core_set_backlight_level(u32 unit, u32 level)
 	pl->value = level > 9 ? 9 : level;
 	pl->enable = 1;
 
-	ret = imanager_acpiram_write_byte(dev->attr[unit].did, val8);
+	ret = imanager_acpiram_write_byte(bl->attr[unit].did, val8);
 	if (ret)
 		return ret;
 
@@ -169,14 +169,14 @@ int bl_core_set_backlight_ctrl(u32 unit, bool enable)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(dev->brightness[unit]);
+	ret = imanager_acpiram_read_byte(bl->brightness[unit]);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
 
 	pl->enable = enable ? 1 : 0;
 
-	ret = imanager_acpiram_write_byte(dev->attr[unit].did, val8);
+	ret = imanager_acpiram_write_byte(bl->attr[unit].did, val8);
 	if (ret)
 		return ret;
 
@@ -192,7 +192,7 @@ int bl_core_get_backlight_ctrl(u32 unit)
 	if (WARN_ON(unit >= EC_BLC_MAX_NUM))
 		return -EINVAL;
 
-	ret = imanager_acpiram_read_byte(dev->attr[unit].did);
+	ret = imanager_acpiram_read_byte(bl->attr[unit].did);
 	if (ret < 0)
 		return ret;
 	val8 = ret;
@@ -303,8 +303,8 @@ int bl_core_get_brightness_polarity(void)
 
 int bl_core_init(void)
 {
-	dev = imanager_get_backlight_device();
-	if (!dev)
+	bl = imanager_get_backlight_device();
+	if (!bl)
 		return -ENODEV;
 
 	return 0;

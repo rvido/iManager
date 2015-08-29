@@ -112,7 +112,7 @@ static const char * fan_temp_label[] = {
 	NULL,
 };
 
-static const struct imanager_hwmon_device *dev;
+static const struct imanager_hwmon_device *hwmon;
 
 static inline int hwm_get_adc_value(u8 did)
 {
@@ -165,9 +165,6 @@ static int hwm_write_fan_config(int fnum, struct fan_dev_config *cfg)
 		.rlen = 0,
 		.wlen = sizeof(struct fan_dev_config),
 	};
-
-	if (WARN_ON(!dev))
-		return -EINVAL;
 
 	if (!cfg->did)
 		return -ENODEV;
@@ -318,23 +315,23 @@ static int hwm_core_set_fan_alert_limit(int fnum,
 
 const char * hwm_core_adc_get_label(int num)
 {
-	if (WARN_ON(!dev && num >= dev->adc.num))
+	if (WARN_ON(num >= hwmon->adc.num))
 		return NULL;
 
-	return dev->adc.attr[num].label;
+	return hwmon->adc.attr[num].label;
 }
 
 const char * hwm_core_fan_get_label(int num)
 {
-	if (WARN_ON(!dev && num >= dev->fan.num))
+	if (WARN_ON(num >= hwmon->fan.num))
 		return NULL;
 
-	return dev->fan.attr[num].label;
+	return hwmon->fan.attr[num].label;
 }
 
 const char * hwm_core_fan_get_temp_label(int num)
 {
-	if (WARN_ON(!dev && num >= dev->fan.num))
+	if (WARN_ON(num >= hwmon->fan.num))
 		return NULL;
 
 	return fan_temp_label[num];
@@ -342,10 +339,10 @@ const char * hwm_core_fan_get_temp_label(int num)
 
 int hwm_core_adc_is_available(int num)
 {
-	if (WARN_ON(!dev && num >= dev->adc.num))
+	if (WARN_ON(num >= hwmon->adc.num))
 		return -ENODEV;
 
-	return dev->adc.attr[num].did ? 0 : -ENODEV;
+	return hwmon->adc.attr[num].did ? 0 : -ENODEV;
 }
 
 int hwm_core_adc_get_value(int num, struct hwm_voltage *volt)
@@ -358,11 +355,11 @@ int hwm_core_adc_get_value(int num, struct hwm_voltage *volt)
 	if (ret < 0)
 		return ret;
 
-	ret = hwm_get_adc_value(dev->adc.attr[num].did);
+	ret = hwm_get_adc_value(hwmon->adc.attr[num].did);
 	if (ret < 0)
 		return ret;
 
-	volt->value = ret * dev->adc.attr[num].scale;
+	volt->value = ret * hwmon->adc.attr[num].scale;
 	volt->valid = true;
 
 	return 0;
@@ -403,7 +400,7 @@ int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan)
 
 	fan->speed = ret;
 
-	ret = hwm_get_pwm_value(dev->fan.attr[num].did);
+	ret = hwm_get_pwm_value(hwmon->fan.attr[num].did);
 	if (ret < 0) {
 		pr_err("Failed to read FAN%d PWM\n", num);
 		return ret;
@@ -445,7 +442,7 @@ int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 	ret = hwm_read_fan_config(num, &cfg);
 	if (ret < 0) {
 		pr_err("Failed while reading FAN %s config\n",
-			dev->fan.attr[num].label);
+			hwmon->fan.attr[num].label);
 		return ret;
 	}
 
@@ -464,7 +461,7 @@ int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 	case MODE_MANUAL:
 		ctrl->type = CTRL_PWM;
 		ctrl->mode = MODE_MANUAL;
-		ret = hwm_set_pwm_value(dev->fan.attr[num].did, pwm);
+		ret = hwm_set_pwm_value(hwmon->fan.attr[num].did, pwm);
 		if (ret < 0)
 			return ret;
 		break;
@@ -506,7 +503,7 @@ int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 
 int hwm_core_fan_is_available(int num)
 {
-	return dev->fan.attr[num].did ? 0 : -ENODEV;
+	return hwmon->fan.attr[num].did ? 0 : -ENODEV;
 }
 
 static int hwm_core_set_fan_limit(int num, int fan_limit,
@@ -521,7 +518,7 @@ static int hwm_core_set_fan_limit(int num, int fan_limit,
 	ret = hwm_read_fan_config(num, &cfg);
 	if (ret < 0) {
 		pr_err("Failed while reading FAN %s config\n",
-			dev->fan.attr[num].label);
+			hwmon->fan.attr[num].label);
 		return ret;
 	}
 
@@ -581,18 +578,18 @@ int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max)
 
 int hwm_core_adc_get_max_count(void)
 {
-	return dev->adc.num;
+	return hwmon->adc.num;
 }
 
 int hwm_core_fan_get_max_count(void)
 {
-	return dev->fan.num;
+	return hwmon->fan.num;
 }
 
 int hwm_core_init(void)
 {
-	dev = imanager_get_hwmon_device();
-	if (!dev)
+	hwmon = imanager_get_hwmon_device();
+	if (!hwmon)
 		return -ENODEV;
 
 	return 0;
