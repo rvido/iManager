@@ -10,6 +10,8 @@
  * option) any later version.
  */
 
+#include <linux/types.h>
+#include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>
@@ -53,10 +55,9 @@
 #define DID_DESC_SIZE			32UL
 
 #define EC_KERNEL_MINOR(x)		(LOBYTE16(x))
-#define EC_KERNEL_MAJOR(x)	__extension__ ({	\
-		typeof(x) __x = (HIBYTE16(x));		\
-		((__x >> 4) * 10 + (__x & 0x000f));	\
-	})
+#define EC_KERNEL_MAJOR(x) ({		\
+	typeof(x) __x = (HIBYTE16(x));	\
+	((__x >> 4) * 10 + (__x & 0x000f)); })
 #define EC_FIRMWARE_MINOR(x)		(LOBYTE16(x))
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(LOBYTE16(x)))
@@ -445,8 +446,8 @@ static void ec_clear_ports(void)
 
 static inline u16 ec_read_chipid(u16 addr)
 {
-	return ((ec_inb(addr, DEVID_REG_MSB) << 8) | \
-		 ec_inb(addr, DEVID_REG_LSB));
+	return (ec_inb(addr, DEVID_REG_MSB) << 8 |
+		ec_inb(addr, DEVID_REG_LSB));
 }
 
 static int ec_wait_cmd_clear(void)
@@ -624,7 +625,8 @@ static int ec_read_buffer(u8 *data, int rlen)
 	return 0;
 }
 
-static int imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool payload)
+static int
+imanager_msg_trans(u8 cmd, u8 param, struct ec_message *msg, bool payload)
 {
 	int ret, i, len;
 	u32 offset;
@@ -858,7 +860,7 @@ static inline void ec_get_dev_attr(struct ec_dev_attr *attr,
 
 static int ec_get_dev_gpio(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct imanager_gpio_device *gpio = &ec->gpio;
 
@@ -930,7 +932,7 @@ static int ec_get_dev_gpio(struct imanager_data *ec)
 
 static int ec_get_dev_adc(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct dev_adc *adc = &ec->sensors.adc;
 
@@ -982,13 +984,13 @@ static int ec_get_dev_adc(struct imanager_data *ec)
 
 static int ec_get_dev_fan(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct dev_fan *fan = &ec->sensors.fan;
 
 	for (i = 0; i < ARRAY_SIZE(ec->dyn); i++) {
 		dyn = &ec->dyn[i];
-		if (dyn->did && ((dyn->devtbl->type == TACH) || \
+		if (dyn->did && ((dyn->devtbl->type == TACH) ||
 				 (dyn->devtbl->type == PWM))) {
 			switch (dyn->did) {
 			case CPUFAN_2P:
@@ -1042,7 +1044,7 @@ static int ec_get_dev_hwmon(struct imanager_data *ec)
 
 static int ec_get_dev_i2c(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct imanager_i2c_device *i2c = &ec->i2c;
 
@@ -1090,7 +1092,7 @@ static int ec_get_dev_i2c(struct imanager_data *ec)
 
 static int ec_get_dev_blc(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct imanager_backlight_device *blc = &ec->blc;
 
@@ -1133,7 +1135,7 @@ static int ec_get_dev_blc(struct imanager_data *ec)
 
 static int ec_get_dev_wdt(struct imanager_data *ec)
 {
-	int i;
+	size_t i;
 	struct ec_dyn_devtbl *dyn;
 	struct imanager_watchdog_device *wdt = &ec->wdt;
 
@@ -1307,9 +1309,9 @@ static int ec_init(void)
 	return 0;
 }
 
-int imanager_ec_probe(u16 addr)
+int imanager_ec_probe(void)
 {
-	int chipid = ec_read_chipid(addr);
+	int chipid = ec_read_chipid(EC_BASE_ADDR);
 
 	memset((void *)&ec, 0, sizeof(ec));
 
@@ -1332,7 +1334,7 @@ int imanager_ec_probe(u16 addr)
 		return -ENODEV;
 	}
 
-	ec.dev.addr = addr;
+	ec.dev.addr = EC_BASE_ADDR;
 
 	return ec_init();
 }

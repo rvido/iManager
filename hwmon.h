@@ -23,60 +23,59 @@
 
 /* Default Voltage Sensors */
 struct hwm_voltage {
-	/* if set, below values are valid */
-	bool	valid;
-	u32	value;
-	u32	min;
-	u32	max;
-	u32	average;
-	u32	lowest;
-	u32	highest;
+	bool valid;	/* if set, below values are valid */
+
+	int value;
+	int min;
+	int max;
+	int average;
+	int lowest;
+	int highest;
 
 };
 
 struct hwm_fan_temp_limit {
-	u32	stop;
-	u32	min;
-	u32	max;
+	int stop;
+	int min;
+	int max;
 };
 
 struct hwm_fan_limit {
-	u32	min;
-	u32	max;
+	int min;
+	int max;
 };
 
 struct hwm_fan_alert {
-	u32	min;
-	u32	max;
-	u32	min_alarm;
-	u32	max_alarm;
+	int min;
+	int max;
+	int min_alarm;
+	int max_alarm;
 };
 
 struct hwm_sensors_limit {
-	struct hwm_fan_temp_limit	temp;
-	struct hwm_fan_limit		pwm;
-	struct hwm_fan_limit		rpm;
+	struct hwm_fan_temp_limit temp;
+	struct hwm_fan_limit	  pwm;
+	struct hwm_fan_limit	  rpm;
 };
 
 struct hwm_smartfan {
-	/* if set, below values are valid */
-	u32	valid;
+	bool valid;	/* if set, below values are valid */
 
-	u32	mode,
-		type,
-		pwm,
-		speed,
-		pulse,
-		alarm;
-	int	temp;
+	int mode;
+	int type;
+	int pwm;
+	int speed;
+	int pulse;
+	int alarm;
+	int temp;
 
-	struct hwm_sensors_limit	limit;
-	struct hwm_fan_alert		alert;
+	struct hwm_sensors_limit limit;
+	struct hwm_fan_alert	 alert;
 };
 
 struct hwm_data {
-	struct hwm_voltage		volt[HWM_MAX_ADC];
-	struct hwm_smartfan		fan[HWM_MAX_FAN];
+	struct hwm_voltage	volt[HWM_MAX_ADC];
+	struct hwm_smartfan	fan[HWM_MAX_FAN];
 };
 
 enum fan_unit {
@@ -102,7 +101,7 @@ int hwm_core_init(void);
 int hwm_core_adc_is_available(int num);
 int hwm_core_adc_get_max_count(void);
 int hwm_core_adc_get_value(int num, struct hwm_voltage *volt);
-const char * hwm_core_adc_get_label(int num);
+const char *hwm_core_adc_get_label(int num);
 
 int hwm_core_fan_is_available(int num);
 int hwm_core_fan_get_max_count(void);
@@ -115,7 +114,7 @@ int hwm_core_fan_set_rpm_limit(int num, int min, int max);
 int hwm_core_fan_set_pwm_limit(int num, int min, int max);
 int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max);
 
-const char * hwm_core_fan_get_label(int num);
-const char * hwm_core_fan_get_temp_label(int num);
+const char *hwm_core_fan_get_label(int num);
+const char *hwm_core_fan_get_temp_label(int num);
 
 #endif

@@ -41,52 +41,46 @@ MODULE_PARM_DESC(nowayout,
 	"Watchdog cannot be stopped once started (default="
 	__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
-static int wdt_start_timer(const struct device *dev)
+static int wdt_start_timer(void)
 {
 	int ret;
 
 	ret = wdt_core_start_timer();
-	if (ret < 0) {
-		dev_err(dev, "Failed to start timer\n");
+	if (ret < 0)
 		return ret;
-	}
 
 	last_updated = jiffies;
 
 	return 0;
 }
 
-static int wdt_stop_timer(const struct device *dev)
+static int wdt_stop_timer(void)
 {
 	int ret;
 
 	ret = wdt_core_stop_timer();
-	if (ret < 0) {
-		dev_err(dev, "Failed to stop timer\n");
+	if (ret < 0)
 		return ret;
-	}
 
 	last_updated = 0;
 
 	return 0;
 }
 
-static int wdt_ping(const struct device *dev)
+static int wdt_ping(void)
 {
 	int ret;
 
 	ret = wdt_core_reset_timer();
-	if (ret < 0) {
-		dev_err(dev, "Failed to reset timer\n");
+	if (ret < 0)
 		return ret;
-	}
 
 	last_updated = jiffies;
 
 	return 0;
 }
 
-static int imanager_wdt_set(const struct device *dev, unsigned int _timeout)
+static int imanager_wdt_set(unsigned int _timeout)
 {
 	int ret;
 
@@ -94,10 +88,8 @@ static int imanager_wdt_set(const struct device *dev, unsigned int _timeout)
 		timeout = _timeout;
 
 	ret = wdt_core_set_timeout(PWRBTN, timeout);
-	if (ret < 0) {
-		dev_err(dev, "Failed to set timeout\n");
+	if (ret < 0)
 		return ret;
-	}
 
 	if (last_updated != 0)
 		last_updated = jiffies;
@@ -113,8 +105,14 @@ static int imanager_wdt_set_timeout(struct watchdog_device *wdt_dev,
 
 	mutex_lock(&ec->lock);
 
-	ret = imanager_wdt_set(wdt_dev->dev, timeout);
-
+	ret = imanager_wdt_set(timeout);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+	if (ret < 0)
+		pr_err("Failed to set timeout\n");
+#else
+	if (ret < 0)
+		dev_err(wdt_dev->dev, "Failed to set timeout\n");
+#endif
 	mutex_unlock(&ec->lock);
 
 	return ret;
@@ -134,12 +132,18 @@ static unsigned int imanager_wdt_get_timeleft(struct watchdog_device *wdt_dev)
 static int imanager_wdt_start(struct watchdog_device *wdt_dev)
 {
 	struct imanager_device_data *ec = watchdog_get_drvdata(wdt_dev);
-	struct device *dev = wdt_dev->dev;
 	int ret = 0;
 
 	mutex_lock(&ec->lock);
 
-	ret = wdt_start_timer(dev);
+	ret = wdt_start_timer();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+	if (ret < 0)
+		pr_err("Failed to start timer\n");
+#else
+	if (ret < 0)
+		dev_err(wdt_dev->dev, "Failed to start timer\n");
+#endif
 
 	mutex_unlock(&ec->lock);
 
@@ -153,7 +157,17 @@ static int imanager_wdt_stop(struct watchdog_device *wdt_dev)
 
 	mutex_lock(&ec->lock);
 
-	ret = wdt_stop_timer(wdt_dev->dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+	if (!nowayout) {
+		ret = wdt_stop_timer();
+		if (ret < 0)
+			pr_err("Failed to stop timer\n");
+	}
+#else
+	ret = wdt_stop_timer();
+	if (ret < 0)
+		dev_err(wdt_dev->dev, "Failed to stop timer\n");
+#endif
 
 	mutex_unlock(&ec->lock);
 
@@ -167,7 +181,14 @@ static int imanager_wdt_ping(struct watchdog_device *wdt_dev)
 
 	mutex_lock(&ec->lock);
 
-	ret = wdt_ping(wdt_dev->dev);
+	ret = wdt_ping();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+	if (ret < 0)
+		pr_err("Failed to reset timer\n");
+#else
+	if (ret < 0)
+		dev_err(wdt_dev->dev, "Failed to reset timer\n");
+#endif
 
 	mutex_unlock(&ec->lock);
 
@@ -178,7 +199,6 @@ static long imanager_wdt_ioctl(struct watchdog_device *wdt_dev,
 			       unsigned int cmd, unsigned long arg)
 {
 	struct imanager_device_data *ec = watchdog_get_drvdata(wdt_dev);
-	struct device *dev = wdt_dev->dev;
 	void __user *argp = (void __user *)arg;
 	int __user *p = argp;
 	int ret = 0;
@@ -208,25 +228,25 @@ static long imanager_wdt_ioctl(struct watchdog_device *wdt_dev,
 			goto out;
 		}
 		if (options & WDIOS_DISABLECARD)
-			wdt_stop_timer(dev);
+			wdt_stop_timer();
 		if (options & WDIOS_ENABLECARD) {
-			wdt_ping(dev);
-			wdt_start_timer(dev);
+			wdt_ping();
+			wdt_start_timer();
 		}
 		break;
 	case WDIOC_KEEPALIVE:
-		wdt_ping(dev);
+		wdt_ping();
 		break;
 	case WDIOC_SETTIMEOUT:
 		if (get_user(timeval, p)) {
 			ret = -EFAULT;
 			goto out;
 		}
-		if (imanager_wdt_set(dev, timeval)) {
+		if (imanager_wdt_set(timeval)) {
 			ret = -EINVAL;
 			goto out;
 		}
-		wdt_ping(dev);
+		wdt_ping();
 		/* Fall through */
 	case WDIOC_GETTIMEOUT:
 		ret = put_user(timeout, p);
@@ -259,7 +279,9 @@ static const struct watchdog_ops imanager_wdt_ops = {
 	.stop		= imanager_wdt_stop,
 	.ping		= imanager_wdt_ping,
 	.set_timeout	= imanager_wdt_set_timeout,
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 	.get_timeleft	= imanager_wdt_get_timeleft,
+#endif
 	.ioctl		= imanager_wdt_ioctl,
 };
 
@@ -282,7 +304,9 @@ static int imanager_wdt_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,2,0)
 	watchdog_set_nowayout(&imanager_wdt_dev, nowayout);
+#endif
 	watchdog_set_drvdata(&imanager_wdt_dev, ec);
 
 	ret = watchdog_register_device(&imanager_wdt_dev);

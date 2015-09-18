@@ -51,9 +51,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 	switch (size) {
 	case I2C_SMBUS_QUICK:
 		ret = i2c_core_write_quick(addr);
-
-		dev_dbg(dev, "I2C_SMBUS_QUICK: addr=0x%02X, rw='%s', ret=%d\n",
-			addr, read_write?"read":"write", ret);
 		break;
 	case I2C_SMBUS_BYTE:
 		if (read_write == I2C_SMBUS_WRITE) /* NOT tested */
@@ -65,10 +62,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 			ret = val;
 		else
 			smb_data->byte = val;
-
-		dev_dbg(dev, "I2C_SMBUS_BYTE: addr=0x%02X, rw='%s', "
-			"cmd=0x%02X, val=0x%02X, ret=%d\n",
-			addr, read_write?"read":"write", command, val, ret);
 		break;
 	case I2C_SMBUS_BYTE_DATA:
 		if (read_write == I2C_SMBUS_WRITE)
@@ -81,10 +74,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 			ret = val;
 		else
 			smb_data->byte = val;
-
-		dev_dbg(dev, "I2C_SMBUS_BYTE_DATA: addr=0x%02X, rw='%s', "
-			"cmd=0x%02X, val=0x%02X, ret=%d\n",
-			addr, read_write?"read":"write", command, val, ret);
 		break;
 	case I2C_SMBUS_WORD_DATA:
 		if (read_write == I2C_SMBUS_WRITE)
@@ -97,10 +86,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 			ret = val;
 		else
 			smb_data->word = val;
-
-		dev_dbg(dev, "I2C_SMBUS_WORD_DATA: addr=0x%02X, rw='%s', "
-			"cmd=0x%02X, val=0x%02X, ret=%d\n",
-			addr, read_write?"read":"write", command, val, ret);
 		break;
 	case I2C_SMBUS_BLOCK_DATA:
 		if (read_write == I2C_SMBUS_WRITE)
@@ -109,10 +94,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 		else
 			ret = i2c_core_read_block_data(addr, command,
 				smb_data->block);
-
-		dev_dbg(dev, "I2C_SMBUS_BLOCK_DATA: addr=0x%02X, rw='%s', "
-			"cmd=0x%02X, val=0x%02X, ret=%d\n",
-			addr, read_write?"read":"write", command, val, ret);
 		break;
 	case I2C_SMBUS_I2C_BLOCK_DATA:
 		if (read_write == I2C_SMBUS_WRITE)
@@ -121,10 +102,6 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 		else
 			ret = i2c_core_read_i2c_block_data(addr, command,
 				smb_data->block);
-
-		dev_dbg(dev, "I2C_SMBUS_I2C_BLOCK_DATA: addr=0x%02X, rw='%s', "
-			"cmd=0x%02X, val=0x%02X, ret=%d\n",
-			addr, read_write?"read":"write", command, val, ret);
 		break;
 	default:
 		dev_err(dev, "Unsupported SMB transaction %d\n", size);

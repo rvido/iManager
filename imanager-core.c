@@ -23,10 +23,6 @@
 #include <core.h>
 #include <ec.h>
 
-static unsigned short force_id;
-module_param(force_id, ushort, 0);
-MODULE_PARM_DESC(force_id, "Override detected device ID");
-
 static struct platform_device *pdev;
 
 enum imanager_cells {
@@ -37,25 +33,10 @@ enum imanager_cells {
 	IMANAGER_WDT,
 };
 
-enum imanager_project_state {
-	RELEASE,
-	ES,
-	CUSTOM,
-	NA,
-};
-
 static const char * const chip_names[] = {
 	"it8516",
 	"it8518",
 	"it8528",
-	NULL
-};
-
-static const char * const project_state[] = {
-	"Release",
-	"Engineering Sample",
-	"Custom",
-	"Unspecified",
 	NULL
 };
 
@@ -88,28 +69,28 @@ static struct mfd_cell imanager_devs[] = {
 
 const char *project_type_to_str(int type)
 {
-	int state;
+	const char *version_type;
 
 	switch (type) {
 	case 'V':
-		state = RELEASE;
+		version_type = "Release";
 		break;
 	case 'X':
-		state = ES;
+		version_type = "Engineering Sample";
 		break;
 	case 'A' ... 'U':
-		state = CUSTOM;
+		version_type = "Custom";
 		break;
 	default:
-		state = NA;
+		version_type = "Unknown";
 		break;
 	}
 
-	return project_state[state];
+	return version_type;
 }
 
 static ssize_t imanager_name_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 	const struct ec_info *info = &pdata->dev->info;
@@ -118,7 +99,7 @@ static ssize_t imanager_name_show(struct device *dev,
 }
 
 static ssize_t imanager_kversion_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 	const struct ec_info *info = &pdata->dev->info;
@@ -129,7 +110,7 @@ static ssize_t imanager_kversion_show(struct device *dev,
 }
 
 static ssize_t imanager_fwversion_show(struct device *dev,
-				       struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 	const struct ec_info *info = &pdata->dev->info;
@@ -140,7 +121,7 @@ static ssize_t imanager_fwversion_show(struct device *dev,
 }
 
 static ssize_t imanager_type_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 	const struct ec_info *info = &pdata->dev->info;
@@ -150,7 +131,7 @@ static ssize_t imanager_type_show(struct device *dev,
 }
 
 static ssize_t imanager_chip_name_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
 	struct imanager_platform_data *pdata = dev_get_platdata(dev);
 
@@ -251,14 +232,6 @@ static int imanager_probe(struct platform_device *pdev)
 		 pdata->dev->info.version.firmware_minor,
 		 project_type_to_str(pdata->dev->info.version.type));
 
-	dev_info(dev, "Available iManager Devices: %s, %s, %s, %s, %s, %s\n",
-		imanager_get_gpio_device()->num ? "GPIO" : "No GPIO",
-		imanager_get_hwmon_device()->adc.num ? "ADC" : "No ADC",
-		imanager_get_hwmon_device()->fan.num ? "FAN" : "No FAN",
-		imanager_get_i2c_device()->num ? "I2C" : "No I2C",
-		imanager_get_backlight_device()->num ? "BL" : "No BL",
-		imanager_get_watchdog_device()->num ? "WD" : "No WD");
-
 	ret = sysfs_create_group(&dev->kobj, &imanager_core_attr_group);
 	if (ret)
 		return ret;
@@ -290,7 +263,7 @@ static int __init imanager_init(void)
 {
 	int ret;
 
-	ret = imanager_ec_probe(EC_BASE_ADDR);
+	ret = imanager_ec_probe();
 	if (ret < 0)
 		return ret;
 

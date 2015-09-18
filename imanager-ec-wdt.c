@@ -13,6 +13,8 @@
  *       In other words, no PWR button, NMI, SCI, IRQ, or WDPin support yet!
  */
 
+#include <linux/types.h>
+#include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>

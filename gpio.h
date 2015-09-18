@@ -19,8 +19,9 @@
 int gpio_core_init(void);
 
 int gpio_core_get_max_count(void);
-int gpio_core_get_state(u32 gpio);
-int gpio_core_set_state(u32 gpio, u32 state);
-int gpio_core_set_direction(u32 gpio, u32 dir);
+
+int gpio_core_get_state(u32 num);
+int gpio_core_set_state(u32 num, bool state);
+int gpio_core_set_direction(u32 num, int dir);
 
 #endif

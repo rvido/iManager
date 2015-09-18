@@ -52,7 +52,8 @@ static int imanager_direction_in(struct gpio_chip *chip, u32 gpio_num)
 	return ret;
 }
 
-static int imanager_direction_out(struct gpio_chip *chip, u32 gpio_num, int val)
+static int
+imanager_direction_out(struct gpio_chip *chip, u32 gpio_num, int val)
 {
 	struct imanager_gpio_data *data = to_imanager_gpio_data(chip);
 	int ret;
@@ -167,6 +168,7 @@ static int imanager_remove(struct platform_device *pdev)
 	if (err)
 		dev_err(&pdev->dev, "Error while removing gpio device\n");
 #else
+
 	gpiochip_remove(&data->chip);
 #endif
 

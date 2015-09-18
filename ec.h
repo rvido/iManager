@@ -136,18 +136,18 @@ struct ec_dev_attr {
 };
 
 struct imanager_gpio_device {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_GPIO_MAX_NUM];
 	struct ec_info		*info;
 };
 
 struct dev_adc {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_HWM_MAX_ADC];
 };
 
 struct dev_fan {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_HWM_MAX_FAN];
 };
 
@@ -158,7 +158,7 @@ struct imanager_hwmon_device {
 };
 
 struct imanager_i2c_device {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_SMB_MAX_NUM];
 	struct ec_dev_attr	*eeprom;
 	struct ec_dev_attr	*i2coem;
@@ -166,22 +166,22 @@ struct imanager_i2c_device {
 };
 
 struct imanager_backlight_device {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_BLC_MAX_NUM];
 	u8			brightness[EC_BLC_MAX_NUM];
 	struct ec_info		*info;
 };
 
 struct imanager_watchdog_device {
-	int			num;
+	u32			num;
 	struct ec_dev_attr	attr[EC_WDT_MAX_NUM];
 	struct ec_dev_attr	*irq;
 	struct ec_dev_attr	*nmi;
 	struct ec_info		*info;
 };
 
-/* imanager_ec_probe() MUST be called first to ensure proper communication */
-int imanager_ec_probe(u16 addr);
+/* Must be called first, obviously */
+int imanager_ec_probe(void);
 
 int imanager_msg_write(u8 cmd, u8 param, struct ec_message *msg);
 int imanager_msg_read(u8 cmd, u8 param, struct ec_message *msg);

@@ -10,6 +10,8 @@
  * option) any later version.
  */
 
+#include <linux/types.h>
+#include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>
@@ -105,7 +107,7 @@ enum fan_limit {
 	LIMIT_TEMP,
 };
 
-static const char * fan_temp_label[] = {
+static const char * const fan_temp_label[] = {
 	"Temp CPU",
 	"Temp SYS1",
 	"Temp SYS2",
@@ -181,14 +183,13 @@ static int hwm_write_fan_config(int fnum, struct fan_dev_config *cfg)
 	case HWM_STATUS_UNDEFINED_ITEM:
 	case HWM_STATUS_UNDEFINED_DID:
 	case HWM_STATUS_UNDEFINED_HWPIN:
-		ret = -EINVAL;
-		break;
+		return -EFAULT;
 	default:
-		pr_err("FAN%d CFG: Unknown error (%d)\n", fnum, ret);
-		ret = -EIO;
+		pr_err("Unknown error status of fan%d (%d)\n", fnum, ret);
+		return -EIO;
 	}
 
-	return ret;
+	return 0;
 }
 
 static inline void hwm_set_temp_limit(struct fan_dev_config *cfg,
@@ -236,7 +237,7 @@ static int hwm_core_get_fan_alert_flag(struct fan_alert_flag *flag)
 }
 
 static int hwm_core_get_fan_alert_limit(int fnum,
-				        struct hwm_smartfan *fan)
+					struct hwm_smartfan *fan)
 {
 	int ret;
 	struct fan_alert_limit limit;
@@ -278,7 +279,7 @@ static int hwm_core_get_fan_alert_limit(int fnum,
 	return 0;
 }
 
-static int hwm_core_set_fan_alert_limit(int fnum,
+static int hwm_core_fan_set_alert_limit(int fnum,
 					struct hwm_fan_alert *alert)
 {
 	int ret;
@@ -313,7 +314,7 @@ static int hwm_core_set_fan_alert_limit(int fnum,
 
 /* HWM CORE API */
 
-const char * hwm_core_adc_get_label(int num)
+const char *hwm_core_adc_get_label(int num)
 {
 	if (WARN_ON(num >= hwmon->adc.num))
 		return NULL;
@@ -321,7 +322,7 @@ const char * hwm_core_adc_get_label(int num)
 	return hwmon->adc.attr[num].label;
 }
 
-const char * hwm_core_fan_get_label(int num)
+const char *hwm_core_fan_get_label(int num)
 {
 	if (WARN_ON(num >= hwmon->fan.num))
 		return NULL;
@@ -329,7 +330,7 @@ const char * hwm_core_fan_get_label(int num)
 	return hwmon->fan.attr[num].label;
 }
 
-const char * hwm_core_fan_get_temp_label(int num)
+const char *hwm_core_fan_get_temp_label(int num)
 {
 	if (WARN_ON(num >= hwmon->fan.num))
 		return NULL;
@@ -339,8 +340,8 @@ const char * hwm_core_fan_get_temp_label(int num)
 
 int hwm_core_adc_is_available(int num)
 {
-	if (WARN_ON(num >= hwmon->adc.num))
-		return -ENODEV;
+	if (num >= EC_HWM_MAX_ADC)
+		return -EINVAL;
 
 	return hwmon->adc.attr[num].did ? 0 : -ENODEV;
 }
@@ -496,17 +497,20 @@ int hwm_core_fan_set_ctrl(int num, int fmode, int ftype, int pwm, int pulse,
 		return ret;
 
 	if (alert)
-		return hwm_core_set_fan_alert_limit(num, alert);
+		return hwm_core_fan_set_alert_limit(num, alert);
 
 	return 0;
 }
 
 int hwm_core_fan_is_available(int num)
 {
+	if (WARN_ON(num >= HWM_MAX_FAN))
+		return -EINVAL;
+
 	return hwmon->fan.attr[num].did ? 0 : -ENODEV;
 }
 
-static int hwm_core_set_fan_limit(int num, int fan_limit,
+static int hwm_core_fan_set_limit(int num, int fan_limit,
 				  struct hwm_sensors_limit *limit)
 {
 	struct fan_dev_config cfg;
@@ -548,7 +552,7 @@ int hwm_core_fan_set_rpm_limit(int num, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(num, LIMIT_RPM, &limit);
+	return hwm_core_fan_set_limit(num, LIMIT_RPM, &limit);
 }
 
 int hwm_core_fan_set_pwm_limit(int num, int min, int max)
@@ -560,7 +564,7 @@ int hwm_core_fan_set_pwm_limit(int num, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(num, LIMIT_PWM, &limit);
+	return hwm_core_fan_set_limit(num, LIMIT_PWM, &limit);
 }
 
 int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max)
@@ -573,7 +577,7 @@ int hwm_core_fan_set_temp_limit(int num, int stop, int min, int max)
 		},
 	};
 
-	return hwm_core_set_fan_limit(num, LIMIT_TEMP, &limit);
+	return hwm_core_fan_set_limit(num, LIMIT_TEMP, &limit);
 }
 
 int hwm_core_adc_get_max_count(void)

@@ -10,6 +10,8 @@
  * option) any later version.
  */
 
+#include <linux/types.h>
+#include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>
@@ -276,7 +278,7 @@ int i2c_core_write_block_data(u16 addr, u8 cmd, u8 *buf)
 	};
 
 	if ((buf[0] == 0) || (buf[0] >= I2C_MAX_WRITE_BYTES)) {
-		pr_err("%s: Invalid write length %d\n", __func__, buf[0]);
+		pr_err("Invalid I2C write length %d\n", buf[0]);
 		return -EINVAL;
 	}
 
@@ -339,7 +341,7 @@ int i2c_core_read_i2c_block_data(u16 addr, u8 cmd, u8 *buf)
 	};
 
 	if ((buf[0] == 0) || (buf[0] > I2C_MAX_READ_BYTES)) {
-		pr_err("Invalid read length\n");
+		pr_err("Invalid I2C read length\n");
 		return -EINVAL;
 	}
 
@@ -366,7 +368,7 @@ int i2c_core_write_i2c_block_data(u16 addr, u8 cmd, u8 *buf)
 
 int i2c_core_smb_get_freq(u32 bus_id)
 {
-	int val = 0, f;
+	int ret = 0, f;
 	int freq_id, freq;
 
 	if (WARN_ON(bus_id > I2C_OEM_1))
@@ -375,15 +377,15 @@ int i2c_core_smb_get_freq(u32 bus_id)
 	switch (i2c->ecdev->id) {
 	case IT8518:
 	case IT8528:
-		val = imanager_read_word(EC_CMD_SMB_FREQ_RD,
+		ret = imanager_read_word(EC_CMD_SMB_FREQ_RD,
 					 EC_SMB_DID(bus_id));
-		if (val < 0) {
+		if (ret < 0) {
 			pr_err("Failed to get bus frequency\n");
-			return -EIO;
+			return ret;
 		}
 
-		freq_id = HIBYTE16(val);
-		f = LOBYTE16(val);
+		freq_id = HIBYTE16(ret);
+		f = LOBYTE16(ret);
 		switch (freq_id) {
 		case 0:
 			freq = f;
@@ -433,21 +435,20 @@ int i2c_core_smb_set_freq(u32 bus_id, u32 freq)
 		default:
 			if (freq < 50)
 				val = freq;
-			else {
-				pr_err("Out-of-range frequency (%d)\n", freq);
+			else
 				return -EINVAL;
-			}
 		}
 
 		err = imanager_write_word(EC_CMD_SMB_FREQ_WR,
 					  EC_SMB_DID(bus_id), val);
 		if (err) {
-			pr_err("Failed to set bus frequency\n");
+			pr_err("Failed to set I2C bus frequency\n");
 			return err;
 		}
 		break;
 	default:
-		return -EINVAL;
+		pr_err("EC version not supported!\n");
+		return -ENODEV;
 	}
 
 	return 0;

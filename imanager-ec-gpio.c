@@ -10,6 +10,8 @@
  * option) any later version.
  */
 
+#include <linux/types.h>
+#include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>
@@ -23,12 +25,9 @@
 #define EC_GPIOF_HIGH		(1 << 0)
 
 /*
- * All GPIO Device IDs are retrieved from the EC firmware
- *
- * Note: After system power-on, BIOS pre-sets GPIO pins to:
+ * Power-on default:
  * GPIO[7..4] := Input
  * GPIO[3..0] := Output
- *
  */
 
 static const struct imanager_gpio_device *gpio;
@@ -47,7 +46,7 @@ int gpio_core_get_state(u32 num)
 	return ret;
 }
 
-int gpio_core_set_state(u32 num, u32 state)
+int gpio_core_set_state(u32 num, bool state)
 {
 	int ret;
 
@@ -64,7 +63,7 @@ int gpio_core_set_state(u32 num, u32 state)
 	return 0;
 }
 
-int gpio_core_set_direction(u32 num, u32 dir)
+int gpio_core_set_direction(u32 num, int dir)
 {
 	int ret;
 
