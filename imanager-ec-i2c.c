@@ -12,6 +12,7 @@
 
 #include <linux/types.h>
 #include <linux/errno.h>
+#include <linux/bug.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/string.h>
