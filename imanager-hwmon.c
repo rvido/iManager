@@ -35,7 +35,7 @@ struct imanager_hwmon_data {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	struct device *hwmon_dev;
 #endif
-	struct imanager_device_data *ec;
+	struct imanager_device_data *idev;
 	bool valid;	/* if set, below values are valid */
 	struct hwm_data hwm;
 	int adc_num;
@@ -61,7 +61,7 @@ imanager_hwmon_update_device(struct device *dev)
 	struct imanager_hwmon_data *data = dev_get_drvdata(dev);
 	int i;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	if (time_after(jiffies, data->last_updated + HZ + HZ / 2)
 	    || !data->valid) {
@@ -77,7 +77,7 @@ imanager_hwmon_update_device(struct device *dev)
 		data->valid = true;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return data;
 }
@@ -135,11 +135,11 @@ store_in_min(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	adc->min = in_to_reg(val);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -158,11 +158,11 @@ store_in_max(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	adc->max = in_to_reg(val);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -189,8 +189,9 @@ show_in_average(struct device *dev, struct device_attribute *attr, char *buf)
 	struct hwm_voltage *adc = &data->hwm.volt[index];
 
 	if (adc->average)
-		adc->average = DIV_ROUND_CLOSEST(adc->average * data->samples
-				+ adc->value, ++data->samples);
+		adc->average =
+			DIV_ROUND_CLOSEST(adc->average * data->samples +
+					  adc->value, ++data->samples);
 	else {
 		adc->average = adc->value;
 		data->samples = 1;
@@ -243,7 +244,7 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	if (val == 1) {
 		adc->lowest = 0;
@@ -252,7 +253,7 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 		count = -EINVAL;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -339,12 +340,12 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 	if (fan->mode != MODE_AUTO)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_rpm_limit(index - 1, val, rpm->max);
 	hwm_core_fan_get_ctrl(index - 1, fan); /* update */
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -368,12 +369,12 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 	if (fan->mode != MODE_AUTO)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_rpm_limit(index - 1, rpm->min, val);
 	hwm_core_fan_get_ctrl(index - 1, fan);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -404,7 +405,7 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 
 	val = DIV_ROUND_CLOSEST(val * 100, 255);
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	switch (fan->mode) {
 	case MODE_MANUAL:
@@ -419,7 +420,7 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 		break;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -472,7 +473,7 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 	if (mode > MODE_AUTO)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	switch (mode) {
 	case 0:
@@ -492,7 +493,7 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 		break;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -527,12 +528,12 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 	if (fan->mode != MODE_AUTO)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_ctrl(nr, fan->mode, val ? CTRL_RPM : CTRL_PWM,
 			      fan->pwm, fan->pulse, &fan->limit, &fan->alert);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -598,12 +599,12 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 	 * temp_stop to the same value as temp_min.
 	 */
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_temp_limit(nr, val, val, temp->max);
 	hwm_core_fan_get_ctrl(nr, fan);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -632,12 +633,12 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 	if (fan->mode != MODE_AUTO)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_temp_limit(nr, temp->stop, temp->min, val);
 	hwm_core_fan_get_ctrl(nr, fan);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -661,11 +662,11 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 	if (val > 100)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_pwm_limit(index - 1, val, pwm->max);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -689,11 +690,11 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 	if (val > 100)
 		return -EINVAL;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	hwm_core_fan_set_pwm_limit(index - 1, pwm->min, val);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return count;
 }
@@ -1023,12 +1024,12 @@ static const struct attribute_group imanager_group_fan = {
 static int imanager_hwmon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct imanager_device_data *ec = dev_get_drvdata(dev->parent);
+	struct imanager_device_data *idev = dev_get_drvdata(dev->parent);
 	struct imanager_hwmon_data *data;
 	struct device *hwmon_dev;
 	int err, i, num_attr_groups = 0;
 
-	if (!ec) {
+	if (!idev) {
 		dev_err(dev, "Invalid platform data\n");
 		return -EINVAL;
 	}
@@ -1044,7 +1045,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
-	data->ec = ec;
+	data->idev = idev;
 	platform_set_drvdata(pdev, data);
 
 	data->adc_num = hwm_core_adc_get_max_count();
