@@ -148,6 +148,7 @@ struct dev_adc {
 
 struct dev_fan {
 	u32			num;
+	u32			active;
 	struct ec_dev_attr	attr[EC_HWM_MAX_FAN];
 };
 

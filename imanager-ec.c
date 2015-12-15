@@ -581,7 +581,7 @@ static int ec_read_buffer(u8 *data, int rlen)
 {
 	int ret, i, j;
 	int pages = rlen % EC_I2C_BLOCK_SIZE;
-	int remainder = rlen / EC_I2C_BLOCK_SIZE;
+	int rem = rlen / EC_I2C_BLOCK_SIZE;
 
 	/* pre-condition: rlen <= 256 */
 
@@ -606,7 +606,7 @@ static int ec_read_buffer(u8 *data, int rlen)
 				ec.read(EC_MSG_OFFSET_DATA(j));
 	}
 
-	if (remainder) {
+	if (rem) {
 		ec.write(EC_MSG_OFFSET_PARAM, pages);
 		ec.write(EC_MSG_OFFSET_CMD, EC_CMD_BUF_RD);
 
@@ -618,7 +618,7 @@ static int ec_read_buffer(u8 *data, int rlen)
 		if (ret != EC_STATUS_SUCCESS)
 			return -EIO;
 
-		for (j = 0; j < remainder; j++)
+		for (j = 0; j < rem; j++)
 			data[pages * EC_I2C_BLOCK_SIZE + j] =
 				ec.read(EC_MSG_OFFSET_DATA(j));
 	}
@@ -998,16 +998,19 @@ static int ec_get_dev_fan(struct imanager_data *ec)
 			case CPUFAN_4P:
 				ec_get_dev_attr(&fan->attr[0], dyn);
 				fan->num++;
+				fan->active |= 1 << 0;
 				break;
 			case SYSFAN1_2P:
 			case SYSFAN1_4P:
 				ec_get_dev_attr(&fan->attr[1], dyn);
 				fan->num++;
+				fan->active |= 1 << 1;
 				break;
 			case SYSFAN2_2P:
 			case SYSFAN2_4P:
 				ec_get_dev_attr(&fan->attr[2], dyn);
 				fan->num++;
+				fan->active |= 1 << 2;
 				break;
 			case TACHO0:
 			case TACHO1:

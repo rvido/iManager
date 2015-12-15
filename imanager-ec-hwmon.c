@@ -149,12 +149,17 @@ static int hwm_read_fan_config(int num, struct fan_dev_config *cfg)
 	if (WARN_ON(!cfg))
 		return -EINVAL;
 
+	memset(cfg, 0, sizeof(struct fan_dev_config));
+
 	ret = imanager_msg_read(EC_CMD_FAN_CTL_RD, num, &msg);
 	if (ret)
 		return ret;
 
-	if (!_cfg->did)
+	if (!_cfg->did) {
+		pr_err("Invalid FAN%d device ID - possible firmware bug\n",
+			num);
 		return -ENODEV;
+	}
 
 	memcpy(cfg, &msg.u.data, sizeof(struct fan_dev_config));
 
@@ -376,8 +381,6 @@ int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan)
 	if (WARN_ON((num >= HWM_MAX_FAN) || !fan))
 		return -EINVAL;
 
-	fan->valid = false;
-
 	memset(fan, 0, sizeof(struct hwm_smartfan));
 
 	ret = hwm_read_fan_config(num, &cfg);
@@ -389,8 +392,8 @@ int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan)
 
 	/*
 	 * It seems that fan->mode does not always report the correct
-	 * FAN mode so the only way of reporting the current FAN mode is
-	 * to read back ctrl->mode.
+	 * FAN mode so the only way of reporting the current FAN mode
+	 * is to read back ctrl->mode.
 	 */
 	fan->mode = ctrl->mode;
 
@@ -508,7 +511,8 @@ int hwm_core_fan_is_available(int num)
 	if (WARN_ON(num >= HWM_MAX_FAN))
 		return -EINVAL;
 
-	return hwmon->fan.attr[num].did ? 0 : -ENODEV;
+	return hwmon->fan.active & (1 << num) &&
+		hwmon->fan.attr[num].did ? 0 : -ENODEV;
 }
 
 static int hwm_core_fan_set_limit(int num, int fan_limit,
