@@ -28,7 +28,7 @@ MODULE_PARM_DESC(bus_frequency,
 	"I2C bus frequency [50, 100, 400]kHz (defaults to 100kHz)");
 
 struct imanager_i2c_data {
-	struct imanager_device_data *ec;
+	struct imanager_device_data *idev;
 	struct i2c_adapter adapter;
 };
 
@@ -46,7 +46,7 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 
 	addr <<= 1;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	switch (size) {
 	case I2C_SMBUS_QUICK:
@@ -108,7 +108,7 @@ static int imanager_smb_access(struct i2c_adapter *adap, u16 addr,
 		ret = -EOPNOTSUPP;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
@@ -123,7 +123,8 @@ static int imanager_i2c_access(struct i2c_adapter *adap, struct i2c_msg *msg,
 	 * To be implemented
 	 */
 
-	dev_info(dev, "msg=%p, num=%d\n", msg, num);
+	dev_info(dev, "i2c_access() is not yet implemented. msg=%p, num=%d\n",
+		 msg, num);
 
 	return 0;
 }
@@ -145,11 +146,11 @@ static const struct i2c_algorithm imanager_algorithm = {
 static int imanager_i2c_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct imanager_device_data *ec = dev_get_drvdata(dev->parent);
+	struct imanager_device_data *idev = dev_get_drvdata(dev->parent);
 	struct imanager_i2c_data *i2c;
 	int ret;
 
-	if (!ec) {
+	if (!idev) {
 		dev_err(dev, "Invalid platform data\n");
 		return -EINVAL;
 	}
@@ -189,7 +190,7 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, i2c);
 	i2c_set_adapdata(&i2c->adapter, i2c);
 
-	i2c->ec = ec;
+	i2c->idev = idev;
 
 	i2c->adapter.owner	= THIS_MODULE;
 	i2c->adapter.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD;
@@ -202,7 +203,7 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	i2c->adapter.retries = 3;
 
 	snprintf(i2c->adapter.name, sizeof(i2c->adapter.name),
-		"IT8518/28 I2C driver");
+		"iManager I2C driver");
 
 	ret = i2c_add_adapter(&i2c->adapter);
 	if (ret) {

@@ -37,7 +37,7 @@ module_param(unit, ushort, 0);
 MODULE_PARM_DESC(unit, "Select backlight control unit [0, 1] (defaults to 0)");
 
 struct imanager_backlight_data {
-	struct imanager_device_data *ec;
+	struct imanager_device_data *idev;
 	struct backlight_device *bl;
 };
 
@@ -46,14 +46,14 @@ static int get_brightness(struct backlight_device *dev)
 	struct imanager_backlight_data *data = bl_get_data(dev);
 	int ret;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	ret = bl_core_get_pulse_width(unit);
 	/* Reverse percentage if polarity is set */
 	if (polarity)
 		ret = 100 - ret;
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
@@ -76,14 +76,14 @@ static int set_brightness(struct backlight_device *dev)
 	if (dev->props.state & BL_CORE_SUSPENDED)
 		brightness = 0;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	/* Inversed percentage if polarity is set */
 	if (polarity)
 		brightness = 100 - brightness;
 	ret = bl_core_set_pulse_width(unit, brightness);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
@@ -134,11 +134,11 @@ static int imanager_backlight_init(struct device *dev,
 static int imanager_backlight_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct imanager_device_data *ec = dev_get_drvdata(dev->parent);
+	struct imanager_device_data *idev = dev_get_drvdata(dev->parent);
 	struct imanager_backlight_data *data;
 	int ret;
 
-	if (!ec) {
+	if (!idev) {
 		dev_err(dev, "Invalid platform data\n");
 		return -EINVAL;
 	}
@@ -173,7 +173,7 @@ static int imanager_backlight_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
-	data->ec = ec;
+	data->idev = idev;
 
 	ret = imanager_backlight_init(dev, data);
 	if (ret)

@@ -23,7 +23,7 @@
 #include <gpio.h>
 
 struct imanager_gpio_data {
-	struct imanager_device_data *ec;
+	struct imanager_device_data *idev;
 	struct gpio_chip chip;
 };
 
@@ -38,7 +38,7 @@ static int imanager_direction_in(struct gpio_chip *chip, u32 gpio_num)
 	struct imanager_gpio_data *data = to_imanager_gpio_data(chip);
 	int ret;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	ret = gpio_core_set_direction(gpio_num, GPIOF_DIR_IN);
 	if (ret) {
@@ -47,7 +47,7 @@ static int imanager_direction_in(struct gpio_chip *chip, u32 gpio_num)
 		ret = -EIO;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
@@ -58,7 +58,7 @@ imanager_direction_out(struct gpio_chip *chip, u32 gpio_num, int val)
 	struct imanager_gpio_data *data = to_imanager_gpio_data(chip);
 	int ret;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	ret = gpio_core_set_direction(gpio_num, GPIOF_DIR_OUT);
 	if (ret) {
@@ -67,17 +67,17 @@ imanager_direction_out(struct gpio_chip *chip, u32 gpio_num, int val)
 		ret = -EIO;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
 
-static int imanager_get(struct gpio_chip *chip, unsigned int gpio_num)
+static int imanager_get(struct gpio_chip *chip, u32 gpio_num)
 {
 	struct imanager_gpio_data *data = to_imanager_gpio_data(chip);
 	int ret;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	ret = gpio_core_get_state(gpio_num);
 	if (ret < 0) {
@@ -85,35 +85,35 @@ static int imanager_get(struct gpio_chip *chip, unsigned int gpio_num)
 		ret = -EIO;
 	}
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 
 	return ret;
 }
 
-static void imanager_set(struct gpio_chip *chip, unsigned int gpio_num,
+static void imanager_set(struct gpio_chip *chip, u32 gpio_num,
 			 int val)
 {
 	struct imanager_gpio_data *data = to_imanager_gpio_data(chip);
 	int ret;
 
-	mutex_lock(&data->ec->lock);
+	mutex_lock(&data->idev->lock);
 
 	ret = gpio_core_set_state(gpio_num, val);
 	if (ret < 0)
 		dev_err(chip->dev, "Failed to set status (%d)\n", gpio_num);
 
-	mutex_unlock(&data->ec->lock);
+	mutex_unlock(&data->idev->lock);
 }
 
 static int imanager_gpio_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct imanager_device_data *ec = dev_get_drvdata(dev->parent);
+	struct imanager_device_data *idev = dev_get_drvdata(dev->parent);
 	struct imanager_gpio_data *data;
 	struct gpio_chip *chip;
 	int ret;
 
-	if (!ec) {
+	if (!idev) {
 		dev_err(dev, "Invalid platform data\n");
 		return -EINVAL;
 	}
@@ -128,7 +128,7 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
-	data->ec = ec;
+	data->idev = idev;
 
 	platform_set_drvdata(pdev, data);
 
