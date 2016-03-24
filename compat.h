@@ -37,6 +37,7 @@ module_exit(__platform_driver##_exit);
 
 #ifdef __NEED_HWMON_COMPAT__
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 0) && ! defined(__RHEL7__)
+#ifndef __RHEL6__
 static int sysfs_create_groups(struct kobject *kobj,
 			       const struct attribute_group **groups)
 {
@@ -56,6 +57,7 @@ static int sysfs_create_groups(struct kobject *kobj,
 	}
 	return error;
 }
+#endif
 
 static void sysfs_remove_groups(struct kobject *kobj,
 				const struct attribute_group **groups)
@@ -68,6 +70,7 @@ static void sysfs_remove_groups(struct kobject *kobj,
 		sysfs_remove_group(kobj, groups[i]);
 }
 
+#ifndef __RHEL6__
 static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 {
 	if (IS_ERR(ptr))
@@ -75,6 +78,7 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 	else
 		return 0;
 }
+#endif
 #endif
 #endif /* __NEED_HWMON_COMPAT__ */
 
@@ -86,8 +90,8 @@ enum pwm_polarity {
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
-#define GPIOF_DIR_OUT   (0 << 0)
-#define GPIOF_DIR_IN    (1 << 0)
+#define GPIOF_DIR_OUT   0UL
+#define GPIOF_DIR_IN    1UL
 #endif
 
 #endif /* __COMPAT_H__ */
