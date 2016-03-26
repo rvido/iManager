@@ -164,9 +164,5 @@
 	Use '**dnf**' (CentOS 7) or '**yum**' (CentOS 6).
 	Avoid using 'rpm' as it would overwrite your kernel unless this is intended.
 	```
-	$ dnf install kernel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm \
-	kernel-headers-3.10.0-327.10.1.el7.adv.1.x86_64.rpm \
-	kernel-tools-3.10.0-327.10.1.el7.adv.1.x86_64.rpm \
-	kernel-tools-libs-3.10.0-327.10.1.el7.adv.1.x86_64.rpm \
-	kernel-devel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm
+	$ dnf install kernel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-headers-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-tools-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-tools-libs-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-devel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm
 	```
