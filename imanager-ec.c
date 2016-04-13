@@ -870,36 +870,28 @@ static int ec_get_dev_gpio(struct imanager_data *ec)
 		if (dyn->did && (dyn->devtbl->type == GPIO)) {
 			switch (dyn->did) {
 			case ALTGPIO0:
-				ec_get_dev_attr(&gpio->attr[0], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO1:
-				ec_get_dev_attr(&gpio->attr[1], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO2:
-				ec_get_dev_attr(&gpio->attr[2], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO3:
-				ec_get_dev_attr(&gpio->attr[3], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO4:
-				ec_get_dev_attr(&gpio->attr[4], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO5:
-				ec_get_dev_attr(&gpio->attr[5], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO6:
-				ec_get_dev_attr(&gpio->attr[6], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case ALTGPIO7:
-				ec_get_dev_attr(&gpio->attr[7], dyn);
-				gpio->num++;
+				ec_get_dev_attr(&gpio->attr[gpio->num++], dyn);
 				break;
 			case BUTTON0:
 			case BUTTON1:
@@ -944,34 +936,29 @@ static int ec_get_dev_adc(struct imanager_data *ec)
 			case ADC12VS0:
 			case ADC12VS0x2:
 			case ADC12VS0x10:
-				ec_get_dev_attr(&adc->attr[0], dyn);
-				adc->num++;
+				ec_get_dev_attr(&adc->attr[adc->num++], dyn);
 				break;
 			case ADC5VS5:
 			case ADC5VS5x2:
 			case ADC5VS5x10:
-				ec_get_dev_attr(&adc->attr[1], dyn);
-				adc->num++;
+				ec_get_dev_attr(&adc->attr[adc->num++], dyn);
 				break;
 			case CMOSBAT:
 			case CMOSBATx2:
 			case CMOSBATx10:
-				ec_get_dev_attr(&adc->attr[2], dyn);
-				adc->num++;
+				ec_get_dev_attr(&adc->attr[adc->num++], dyn);
 				break;
 			case VCOREA:
 			case ADC5VS0:
 			case ADC5VS0x2:
 			case ADC5VS0x10:
-				ec_get_dev_attr(&adc->attr[3], dyn);
-				adc->num++;
+				ec_get_dev_attr(&adc->attr[adc->num++], dyn);
 				break;
 			case CURRENT:
 			case ADC33VS0:
 			case ADC33VS0x2:
 			case ADC33VS0x10:
-				ec_get_dev_attr(&adc->attr[4], dyn);
-				adc->num++;
+				ec_get_dev_attr(&adc->attr[adc->num++], dyn);
 				break;
 			default:
 				pr_err("DID 0x%02X not handled\n", dyn->did);
@@ -982,6 +969,13 @@ static int ec_get_dev_adc(struct imanager_data *ec)
 
 	return 0;
 }
+
+static const char * const fan_temp_label[] = {
+	"Temp CPU",
+	"Temp SYS1",
+	"Temp SYS2",
+	NULL,
+};
 
 static int ec_get_dev_fan(struct imanager_data *ec)
 {
@@ -996,21 +990,18 @@ static int ec_get_dev_fan(struct imanager_data *ec)
 			switch (dyn->did) {
 			case CPUFAN_2P:
 			case CPUFAN_4P:
-				ec_get_dev_attr(&fan->attr[0], dyn);
-				fan->num++;
-				fan->active |= 1 << 0;
+				fan->temp_label[fan->num] = fan_temp_label[0];
+				ec_get_dev_attr(&fan->attr[fan->num++], dyn);
 				break;
 			case SYSFAN1_2P:
 			case SYSFAN1_4P:
-				ec_get_dev_attr(&fan->attr[1], dyn);
-				fan->num++;
-				fan->active |= 1 << 1;
+				fan->temp_label[fan->num] = fan_temp_label[1];
+				ec_get_dev_attr(&fan->attr[fan->num++], dyn);
 				break;
 			case SYSFAN2_2P:
 			case SYSFAN2_4P:
-				ec_get_dev_attr(&fan->attr[2], dyn);
-				fan->num++;
-				fan->active |= 1 << 2;
+				fan->temp_label[fan->num] = fan_temp_label[2];
+				ec_get_dev_attr(&fan->attr[fan->num++], dyn);
 				break;
 			case TACHO0:
 			case TACHO1:

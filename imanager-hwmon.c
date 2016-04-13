@@ -95,8 +95,8 @@ static ssize_t
 show_in(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	return sprintf(buf, "%u\n", in_from_reg(adc->value));
 }
@@ -105,8 +105,8 @@ static ssize_t
 show_in_min(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	return sprintf(buf, "%u\n", in_from_reg(adc->min));
 }
@@ -115,8 +115,8 @@ static ssize_t
 show_in_max(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	return sprintf(buf, "%u\n", in_from_reg(adc->max));
 }
@@ -126,8 +126,8 @@ store_in_min(struct device *dev, struct device_attribute *attr,
 	     const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 	unsigned long val;
 	int err;
 
@@ -149,8 +149,8 @@ store_in_max(struct device *dev, struct device_attribute *attr,
 	     const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 	unsigned long val;
 	int err;
 
@@ -171,8 +171,8 @@ static ssize_t
 show_in_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 	int val = 0;
 
 	if (adc->valid)
@@ -185,8 +185,8 @@ static ssize_t
 show_in_average(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	if (adc->average)
 		adc->average =
@@ -204,8 +204,8 @@ static ssize_t
 show_in_lowest(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	if (!adc->lowest)
 		adc->lowest = adc->highest = adc->value;
@@ -219,8 +219,8 @@ static ssize_t
 show_in_highest(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 
 	if (!adc->highest)
 		adc->highest = adc->value;
@@ -235,8 +235,8 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 		       const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_voltage *adc = &data->hwm.volt[index];
+	int nr = to_sensor_dev_attr(attr)->index;
+	struct hwm_voltage *adc = &data->hwm.volt[nr];
 	unsigned long val;
 	int err;
 
@@ -262,8 +262,8 @@ static ssize_t
 show_temp(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 
 	return sprintf(buf, "%u\n", fan->temp * 1000);
 }
@@ -272,8 +272,8 @@ static ssize_t
 show_fan_in(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 
 	return sprintf(buf, "%u\n", fan->valid ? fan->speed : 0);
 }
@@ -295,8 +295,8 @@ static ssize_t
 show_fan_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 
 	return sprintf(buf, "%u\n", fan->valid ? is_alarm(fan) : 0);
 }
@@ -305,8 +305,8 @@ static ssize_t
 show_fan_min(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_fan_limit *rpm = &data->hwm.fan[index - 1].limit.rpm;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_fan_limit *rpm = &data->hwm.fan[nr].limit.rpm;
 
 	return sprintf(buf, "%u\n", rpm->min);
 }
@@ -315,8 +315,8 @@ static ssize_t
 show_fan_max(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_fan_limit *rpm = &data->hwm.fan[index - 1].limit.rpm;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_fan_limit *rpm = &data->hwm.fan[nr].limit.rpm;
 
 	return sprintf(buf, "%u\n", rpm->max);
 }
@@ -326,8 +326,8 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 	      const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 	struct hwm_fan_limit *rpm = &fan->limit.rpm;
 	unsigned long val = 0;
 	int err;
@@ -338,12 +338,12 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 
 	/* do not apply value if not in 'fan cruise mode' */
 	if (fan->mode != MODE_AUTO)
-		return -EINVAL;
+		return count;
 
 	mutex_lock(&data->idev->lock);
 
-	hwm_core_fan_set_rpm_limit(index - 1, val, rpm->max);
-	hwm_core_fan_get_ctrl(index - 1, fan); /* update */
+	hwm_core_fan_set_rpm_limit(nr, val, rpm->max);
+	hwm_core_fan_get_ctrl(nr, fan); /* update */
 
 	mutex_unlock(&data->idev->lock);
 
@@ -355,8 +355,8 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 	      const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 	struct hwm_fan_limit *rpm = &fan->limit.rpm;
 	unsigned long val = 0;
 	int err;
@@ -367,12 +367,12 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 
 	/* do not apply value if not in 'fan cruise mode' */
 	if (fan->mode != MODE_AUTO)
-		return -EINVAL;
+		return count;
 
 	mutex_lock(&data->idev->lock);
 
-	hwm_core_fan_set_rpm_limit(index - 1, rpm->min, val);
-	hwm_core_fan_get_ctrl(index - 1, fan);
+	hwm_core_fan_set_rpm_limit(nr, rpm->min, val);
+	hwm_core_fan_get_ctrl(nr, fan);
 
 	mutex_unlock(&data->idev->lock);
 
@@ -383,8 +383,8 @@ static ssize_t
 show_pwm(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	u32 val = DIV_ROUND_CLOSEST(data->hwm.fan[index - 1].pwm * 255, 100);
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	u32 val = DIV_ROUND_CLOSEST(data->hwm.fan[nr].pwm * 255, 100);
 
 	return sprintf(buf, "%u\n", val);
 }
@@ -394,8 +394,8 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 	  const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
 	unsigned long val = 0;
 	int err;
 
@@ -409,13 +409,13 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 
 	switch (fan->mode) {
 	case MODE_MANUAL:
-		hwm_core_fan_set_ctrl(index - 1, MODE_MANUAL, CTRL_PWM,
+		hwm_core_fan_set_ctrl(nr, MODE_MANUAL, CTRL_PWM,
 				      val, 0, NULL, NULL);
 		break;
 	case MODE_AUTO:
 		if (fan->type == CTRL_RPM)
 			break;
-		hwm_core_fan_set_ctrl(index - 1, MODE_AUTO, CTRL_PWM,
+		hwm_core_fan_set_ctrl(nr, MODE_AUTO, CTRL_PWM,
 				      val, 0, &fan->limit, &fan->alert);
 		break;
 	}
@@ -429,18 +429,18 @@ static ssize_t
 show_pwm_min(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
 
-	return sprintf(buf, "%u\n", data->hwm.fan[index - 1].limit.pwm.min);
+	return sprintf(buf, "%u\n", data->hwm.fan[nr].limit.pwm.min);
 }
 
 static ssize_t
 show_pwm_max(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
 
-	return sprintf(buf, "%u\n", data->hwm.fan[index - 1].limit.pwm.max);
+	return sprintf(buf, "%u\n", data->hwm.fan[nr].limit.pwm.max);
 }
 
 static ssize_t
@@ -471,25 +471,22 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 		return err;
 
 	if (mode > MODE_AUTO)
-		return -EINVAL;
+		return count;
 
 	mutex_lock(&data->idev->lock);
 
 	switch (mode) {
 	case 0:
-		if (mode != 0)
-			hwm_core_fan_set_ctrl(nr, MODE_FULL, CTRL_PWM, 100,
-					      fan->pulse, NULL, NULL);
+		hwm_core_fan_set_ctrl(nr, MODE_FULL, CTRL_PWM, 100,
+				      fan->pulse, NULL, NULL);
 		break;
 	case 1:
-		if (mode != 1)
-			hwm_core_fan_set_ctrl(nr, MODE_MANUAL, CTRL_PWM, 0,
-					      fan->pulse, NULL, NULL);
+		hwm_core_fan_set_ctrl(nr, MODE_MANUAL, CTRL_PWM, 0,
+				      fan->pulse, NULL, NULL);
 		break;
 	case 2:
-		if (mode != 2)
-			hwm_core_fan_set_ctrl(nr, MODE_AUTO, fan->type, 0,
-					      fan->pulse, &fan->limit, NULL);
+		hwm_core_fan_set_ctrl(nr, MODE_AUTO, fan->type, 0,
+				      fan->pulse, &fan->limit, NULL);
 		break;
 	}
 
@@ -502,13 +499,14 @@ static ssize_t
 show_pwm_mode(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_smartfan *fan = &data->hwm.fan[index - 1];
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_smartfan *fan = &data->hwm.fan[nr];
+	unsigned mode = fan->type == CTRL_PWM ? 1 : 0;
 
 	if (fan->mode == MODE_OFF)
-		return -EINVAL;
+		mode = 0;
 
-	return sprintf(buf, "%u\n", fan->type == CTRL_PWM ? 1 : 0);
+	return sprintf(buf, "%u\n", mode);
 }
 
 static ssize_t
@@ -526,7 +524,7 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 		return err;
 
 	if (fan->mode != MODE_AUTO)
-		return -EINVAL;
+		return count;
 
 	mutex_lock(&data->idev->lock);
 
@@ -648,8 +646,8 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 	      const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_fan_limit *pwm = &data->hwm.fan[index - 1].limit.pwm;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_fan_limit *pwm = &data->hwm.fan[nr].limit.pwm;
 	long val = 0;
 	int err;
 
@@ -664,7 +662,7 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->idev->lock);
 
-	hwm_core_fan_set_pwm_limit(index - 1, val, pwm->max);
+	hwm_core_fan_set_pwm_limit(nr, val, pwm->max);
 
 	mutex_unlock(&data->idev->lock);
 
@@ -676,8 +674,8 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 	      const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
-	int index = to_sensor_dev_attr(attr)->index;
-	struct hwm_fan_limit *pwm = &data->hwm.fan[index - 1].limit.pwm;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
+	struct hwm_fan_limit *pwm = &data->hwm.fan[nr].limit.pwm;
 	long val = 0;
 	int err;
 
@@ -692,7 +690,7 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&data->idev->lock);
 
-	hwm_core_fan_set_pwm_limit(index - 1, pwm->min, val);
+	hwm_core_fan_set_pwm_limit(nr, pwm->min, val);
 
 	mutex_unlock(&data->idev->lock);
 
@@ -702,25 +700,25 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 static ssize_t
 show_in_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	int index = to_sensor_dev_attr(attr)->index;
+	int nr = to_sensor_dev_attr(attr)->index;
 
-	return sprintf(buf, "%s\n", hwm_core_adc_get_label(index));
+	return sprintf(buf, "%s\n", hwm_core_adc_get_label(nr));
 }
 
 static ssize_t
 show_temp_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	int index = to_sensor_dev_attr(attr)->index;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
 
-	return sprintf(buf, "%s\n", hwm_core_fan_get_temp_label(index - 1));
+	return sprintf(buf, "%s\n", hwm_core_fan_get_temp_label(nr));
 }
 
 static ssize_t
 show_fan_label(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	int index = to_sensor_dev_attr(attr)->index;
+	int nr = to_sensor_dev_attr(attr)->index - 1;
 
-	return sprintf(buf, "%s\n", hwm_core_fan_get_label(index - 1));
+	return sprintf(buf, "%s\n", hwm_core_fan_get_label(nr));
 }
 
 /*

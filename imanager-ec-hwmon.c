@@ -108,13 +108,6 @@ enum fan_limit {
 	LIMIT_TEMP,
 };
 
-static const char * const fan_temp_label[] = {
-	"Temp CPU",
-	"Temp SYS1",
-	"Temp SYS2",
-	NULL,
-};
-
 static const struct imanager_hwmon_device *hwmon;
 
 static inline int hwm_get_adc_value(u8 did)
@@ -341,7 +334,7 @@ const char *hwm_core_fan_get_temp_label(int num)
 	if (WARN_ON(num >= hwmon->fan.num))
 		return NULL;
 
-	return fan_temp_label[num];
+	return hwmon->fan.temp_label[num];
 }
 
 int hwm_core_adc_is_available(int num)
@@ -389,6 +382,8 @@ int hwm_core_fan_get_ctrl(int num, struct hwm_smartfan *fan)
 
 	fan->pulse = ctrl->pulse;
 	fan->type = ctrl->type;
+
+	fan->temp = cfg.temp;
 
 	/*
 	 * It seems that fan->mode does not always report the correct
@@ -511,8 +506,7 @@ int hwm_core_fan_is_available(int num)
 	if (WARN_ON(num >= HWM_MAX_FAN))
 		return -EINVAL;
 
-	return hwmon->fan.active & (1 << num) &&
-		hwmon->fan.attr[num].did ? 0 : -ENODEV;
+	return hwmon->fan.attr[num].did ? 0 : -ENODEV;
 }
 
 static int hwm_core_fan_set_limit(int num, int fan_limit,
