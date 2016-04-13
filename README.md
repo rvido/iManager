@@ -2,25 +2,23 @@
 
 ## Description
 
-This is a set of platform drivers which provides support for
-multiple embedded features such as GPIO, I2C/SMBus, Hardware
-Monitoring, Watchdog, and Backlight/Brightness control. Those
-features are available on Advantech Embedded boards such as
-SOM, MIO, AIMB, and PCM. Datasheets of each product line can be
-downloaded from <http://www.advantech.com>
+This is a set of platform drivers which provides support for multiple embedded
+features such as GPIO, I2C/SMBus, Hardware Monitoring, Watchdog, and
+Backlight/Brightness control. Those features are available on Advantech
+Embedded boards such as SOM, MIO, AIMB, and PCM. Datasheets of each product
+line can be downloaded from <http://www.advantech.com>
 
 Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
 
 
-### Kernel driver imanager (MFD)
+### iManager (MFD) driver
 
-This is a Multi-Function-Device (MFD) driver which provides a
-communication layer to the Advantech iManager Embedded
-Controller. The type of communication is message based. The
-client (sub-driver) requests information from Advantech
-iManager and waits for a response (polling). If a response has
-been received within an expected time, the data is been
-extracted from the message and then hand-off to the caller.
+This is a Multi-Function-Device (MFD) driver which provides a communication
+layer to the Advantech iManager Embedded Controller. The type of communication
+is message based. The client (sub-driver) requests information from Advantech
+iManager and waits for a response (polling). If a response has been received
+within an expected time, the data is been extracted from the message and then
+hand-off to the caller.
 
 #### Supported chips
 
@@ -34,60 +32,68 @@ extracted from the message and then hand-off to the caller.
 	Addresses: 0x0299/0x029a
 	Datasheet: Available from ITE upon request
 
-This driver depends on [mfd-core](http://lxr.free-electrons.com/source/drivers/mfd/mfd-core.c)
+Driver name: ***imanager***
+
+Depends on:  [mfd-core](http://lxr.free-electrons.com/source/drivers/mfd/mfd-core.c)
 
 
-### Kernel driver imanager_gpio
+### GPIO driver
 
 This platform driver provides support for 8-bit iManager GPIO
 which can be accessed through SYSFS (/sys/class/gpio/). Linux
-Kernel config option **CONFIG_GPIO_SYSFS** needs to be enabled.
+Kernel config option **CONFIG\_GPIO\_SYSFS** needs to be enabled.
 
-This driver depends on ***imanager*** (mfd).
+Driver name: ***gpio-imanager***
+
+Depends on:  ***imanager*** (mfd)
 
 
-### Kernel driver imanager_i2c
+### I2C driver
 
 This platform driver provides support for iManager I2C/SMBus.
 
-This driver depends on ***imanager*** (mfd).
+Driver name: ***i2c-imanager***
+
+Depends on:  ***imanager*** (mfd)
 
 #### Module Parameters
 
 **bus_frequency** (unsigned short)
 
-	Set desired bus frequency. Valid values (kHz) are:
-		 50: Slow
-		100: Standard (default)
-		400: Fast
+Set desired bus frequency.
+
+	Valid values (kHz) are:
+			 50: Slow
+			100: Standard (default)
+			400: Fast
 
 #### Description
 
 The Advantech iManager provides up to four SMBus controllers.
 One of them is configured for I2C compatibility.
 
-	Process Call
-		Not supported
+	Features:
+		Process Call
+			Not supported
 
-	I2C Block-Read
-		Supported
+		I2C Block-Read
+			Supported
 
-	SMBus 2.0 Support
-		- No PEC
-		- No Interrupt
+		SMBus 2.0 Support
+			- No PEC
+			- No Interrupt
 
 
-### Kernel driver imanager_hwmon
+### Hardware monitor driver
 
-This platform driver provides support for iManager Hardware
-Monitoring and FAN control.
+This platform driver provides support for iManager hardware
+monitoring and FAN control.
 
-This driver depends on ***imanager*** (mfd).
+Driver name: ***imanager_hwmon***
+
+Depends on:  ***imanager*** (mfd)
 
 #### Description
-
-This driver provides support for the Advantech iManager
-Hardware Monitoring EC.
 
 The Advantech iManager supports up to 3 fan rotation speed
 sensors, 3 temperature monitoring sources and up to 5 voltage
@@ -143,17 +149,70 @@ The mode works for fan1-fan3.
 		Maximum fan speed
 
 
-### Kernel driver imanager_wdt
+### Watchdog driver
 
 This driver provides support for iManager watchdog.
 
-This driver depends on ***imanager*** (mfd).
+Driver name: ***imanager_wdt***
 
-### Kernel driver imanager_bl
+Depends on:  ***imanager*** (mfd)
+
+
+### Backlight/Brightness driver
 
 This driver provides support for iManager backlight and
 brightness control which can be accessed through SYSFS
 (/sys/class/backlight).
 
-This driver depends on ***imanager*** (mfd).
+Driver name: ***imanager_bl***
 
+Depends on:  ***imanager*** (mfd)
+
+
+## Build Requirements
+
+Besides the required build tools e.g. gcc, make, and kernel development
+packages, the kernel also needs to have sub-drivers enabled depending
+on the desired features (MFD, GPIO, SYSFS, HWMON, and I2C).
+
+Off-the-shelf Linux distributions such as Fedora, Ubuntu, Debian etc. (you
+name it) usually provide support for a set of embedded features without
+having to customize the kernel.  Support for a certain feature can be
+verified by checking the kernel configuration file which is stored under
+/boot/ directory.
+
+- Multi-Function-Device (MFD) - required for iManager
+
+		$ grep CONFIG_MFD_CORE /boot/config-$(uname -r)
+
+- SYFS for Hardware Monitoring
+
+		$ grep CONFIG_HWMON /boot/config-$(uname -r)
+
+- SYFS for GPIO (GPIOLIB and GPIO_SYSFS)
+
+		$ grep CONFIG_GPIO /boot/config-$(uname -r)
+
+- I2C bus driver support
+
+		$ grep 'CONFIG_I2C=' /boot/config-$(uname -r)
+
+## Build Instructions
+
+- Modify Makefile.kbuild according to your requirements.
+- Remove 'm' at the end of a CONFIG_ line if the driver **should not** be built.
+- Build the drivers.
+
+		$ make
+
+	The drivers can be installed into the kernel driver tree with
+
+		$ make install
+
+	The drivers can be found at
+
+		/lib/modules/$(shell uname -r)/extra/imanager/
+
+#### CentOS 6/7 Users Requiring Suppport for GPIO
+
+Please see [README_CentOS.md](./README_CentOS.md) file for customizing a RHEL kernel.
