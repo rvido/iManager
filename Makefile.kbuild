@@ -11,20 +11,14 @@ CONFIG_SENSORS		:= m
 CONFIG_BACKLIGHT	:= m
 CONFIG_WDT		:= m
 
-$(NAME)-objs		:= $(NAME)-core.o $(NAME)-ec.o
-obj-$(CONFIG_MFD)	+= $(NAME).o
+obj-$(CONFIG_MFD)	+= $(NAME)-core.o
 
-gpio-$(NAME)-objs	:= $(NAME)-gpio.o $(NAME)-ec-gpio.o
 obj-$(CONFIG_GPIO)	+= gpio-$(NAME).o
 
-i2c-$(NAME)-objs	:= $(NAME)-i2c.o $(NAME)-ec-i2c.o
 obj-$(CONFIG_I2C)	+= i2c-$(NAME).o
 
-$(NAME)_hwmon-objs	:= $(NAME)-hwmon.o $(NAME)-ec-hwmon.o
-obj-$(CONFIG_SENSORS)	+= $(NAME)_hwmon.o
+obj-$(CONFIG_SENSORS)	+= $(NAME)-hwmon.o
 
-$(NAME)_bl-objs		:= $(NAME)-bl.o $(NAME)-ec-bl.o
 obj-$(CONFIG_BACKLIGHT)	+= $(NAME)_bl.o
 
-$(NAME)_wdt-objs	:= $(NAME)-wdt.o $(NAME)-ec-wdt.o
 obj-$(CONFIG_WDT)	+= $(NAME)_wdt.o

@@ -10,9 +10,11 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
+#include <linux/io.h>
+#include <linux/ioport.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 #error This driver is for kernel versions 2.6.32 and later
 #endif
 
@@ -36,8 +38,8 @@ module_exit(__platform_driver##_exit);
 #endif /* module_platform_driver */
 
 #ifdef __NEED_HWMON_COMPAT__
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 0) && ! defined(__RHEL7__)
-#ifndef __RHEL6__
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0) && ! defined(__RHEL7__)
+#if ! defined(__RHEL6__)
 static int sysfs_create_groups(struct kobject *kobj,
 			       const struct attribute_group **groups)
 {
@@ -70,7 +72,7 @@ static void sysfs_remove_groups(struct kobject *kobj,
 		sysfs_remove_group(kobj, groups[i]);
 }
 
-#ifndef __RHEL6__
+#if ! defined(__RHEL6__)
 static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 {
 	if (IS_ERR(ptr))
@@ -82,16 +84,21 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 #endif
 #endif /* __NEED_HWMON_COMPAT__ */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) || defined(__RHEL6__)
 enum pwm_polarity {
 	PWM_POLARITY_NORMAL,
 	PWM_POLARITY_INVERSED,
 };
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
 #define GPIOF_DIR_OUT   0UL
 #define GPIOF_DIR_IN    1UL
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0) || defined(__RHEL6__)
+#undef umode_t
+#define umode_t mode_t
 #endif
 
 #endif /* __COMPAT_H__ */
