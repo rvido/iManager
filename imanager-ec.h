@@ -1,5 +1,5 @@
 /*
- * Advantech iManager core - firmware interface
+ * Advantech iManager - firmware interface
  *
  * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -20,31 +20,29 @@
  * Values lower than 200us are not encouraged and may
  * cause I/O errors
  */
-#define EC_DELAY_MIN			200 /* micro seconds */
-#define EC_DELAY_MAX			210
-#define EC_MAX_RETRY			500
+#define EC_DELAY_MIN			200UL /* micro seconds */
+#define EC_DELAY_MAX			250UL
+#define EC_MAX_RETRY			400UL
 
-#define EC_DEVID_IT8516			0x8516
-#define EC_DEVID_IT8518			0x8518
-#define EC_DEVID_IT8528			0x8528
+#define CHIP_ID_IT8518			0x8518
+#define CHIP_ID_IT8528			0x8528
 
 #define EC_BASE_ADDR			0x029C
 
-#define IT8516_CMD_PORT			0x029A /* it8528 */
-#define IT8516_DAT_PORT			0x0299
-
-#define IT8518_CMD_PORT			0x029E /* it8518 */
+#define IT8528_CMD_PORT			0x029A
+#define IT8528_DAT_PORT			0x0299
+#define IT8518_CMD_PORT			0x029E
 #define IT8518_DAT_PORT			0x029F
 
-#define EC_GPIO_MAX_NUM			8
-#define EC_HWM_MAX_ADC			5
-#define EC_HWM_MAX_FAN			3
-#define EC_BLC_MAX_NUM			2
-#define EC_SMB_MAX_NUM			4
-#define EC_WDT_MAX_NUM			2
+#define EC_GPIO_MAX_NUM			8UL
+#define EC_HWM_MAX_ADC			5UL
+#define EC_HWM_MAX_FAN			3UL
+#define EC_BLC_MAX_NUM			2UL
+#define EC_SMB_MAX_NUM			4UL
+#define EC_WDT_MAX_NUM			2UL
 
-#define PCB_NAME_SIZE			32
-#define EC_PAYLOAD_SIZE			40
+#define PCB_NAME_SIZE			32UL
+#define EC_PAYLOAD_SIZE			40UL
 #define EC_MSG_SIZE			sizeof(struct ec_smb_message)
 #define EC_MSG_HDR_SIZE			sizeof(struct ec_smb_message_header)
 
@@ -94,19 +92,19 @@
 #define EC_ACPIRAM_FW_RELEASE_RD	0xF8UL
 
 /*
- * iManager feature flags
+ * iManager flags and offsets
  */
 #define IMANAGER_FEATURE_BACKLIGHT	BIT(0)
 #define IMANAGER_FEATURE_GPIO		BIT(1)
-#define IMANAGER_FEATURE_HWMON		BIT(2)
-#define IMANAGER_FEATURE_HWMON_FAN1	BIT(3)
-#define IMANAGER_FEATURE_HWMON_FAN2	BIT(4)
-#define IMANAGER_FEATURE_HWMON_FAN3	BIT(5)
-#define IMANAGER_FEATURE_I2C		BIT(6)
-#define IMANAGER_FEATURE_WDT		BIT(7)
+#define IMANAGER_FEATURE_HWMON_ADC	BIT(2)
+#define IMANAGER_FEATURE_HWMON_FAN	BIT(3)
+#define IMANAGER_FEATURE_SMBUS		BIT(4)
+#define IMANAGER_FEATURE_WDT		BIT(5)
 
 #define EC_FLAG_OUTBUF			BIT(0)
 #define EC_FLAG_INBUF			BIT(1)
+
+#define EC_MSG_FLAG_HWMON		BIT(9)
 
 #define EC_MSG_OFFSET_CMD		0UL
 #define EC_MSG_OFFSET_STATUS		1UL
@@ -115,8 +113,8 @@
 #define EC_MSG_OFFSET_PAYLOAD(N)	(7UL + N)
 
 /* The Device ID registers - 16 bit */
-#define DEVID_REG_MSB			0x20
-#define DEVID_REG_LSB			0x21
+#define EC_DID_REG_MSB			0x20
+#define EC_DID_REG_LSB			0x21
 
 /*
  * IT8528 based firmware require a read/write command offset.
@@ -128,7 +126,6 @@
 #define EC_STATUS_CMD_COMPLETE		BIT(7)
 
 #define PCB_NAME_MAX_SIZE		8UL
-#define EC_I2C_BLOCK_SIZE		32UL
 
 #define EC_KERNEL_MINOR(x)		(LOBYTE16(x))
 #define EC_KERNEL_MAJOR(x) ({		\
@@ -138,7 +135,7 @@
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(LOBYTE16(x)))
 
-enum kinds { IT8516, IT8518, IT8528 };
+enum kinds { IT8518, IT8528 };
 
 enum ec_ram_type {
 	EC_RAM_ACPI = 1,

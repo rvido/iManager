@@ -29,11 +29,16 @@
 #define __NEED_HWMON_COMPAT__
 #include "compat.h"
 
-#define CHECK_BIT(var, pos) (var & BIT(pos))
+/* Voltage computation (10-bit ADC, 0..3V input) */
+#define SCALE_IN	2933 /* (3000mV / (2^10 - 1)) * 1000 */
+
+#define HWM_STATUS_UNDEFINED_ITEM	2UL
+#define HWM_STATUS_UNDEFINED_DID	3UL
+#define HWM_STATUS_UNDEFINED_HWPIN	4UL
 
 struct imanager_hwmon_data {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
-	struct device *hwmon_dev;
+	struct device *hwmon_device;
 #endif
 	struct imanager_device_data *imgr;
 	bool valid;	/* if set, below values are valid */
@@ -47,7 +52,7 @@ static int imanager_hwmon_read_fan_config(struct imanager_io_ops *io, int fnum,
 					  struct fan_dev_config *fdev)
 {
 	struct ec_message msg = {
-		.rlen = 0xff, /* use alternative message body */
+		.rlen = EC_MSG_FLAG_HWMON,
 		.wlen = 0,
 		.param = fnum,
 		.data = NULL,
@@ -100,6 +105,7 @@ imanager_hwmon_write_fan_config(struct imanager_io_ops *io, int fnum,
 	return 0;
 }
 
+#define CHECK_BIT(var, pos) (var & BIT(pos))
 #define FAN_ALERT_MIN_BIT(var, fnum) CHECK_BIT(var, (fnum << 1))
 #define FAN_ALERT_MAX_BIT(var, fnum) CHECK_BIT(var, (fnum << 1) + 1)
 
@@ -113,13 +119,12 @@ static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int fnum,
 	int ret;
 
 	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_ACPIRAM_FAN_SPEED_LIMIT,
-				sizeof(limits), (u8 *)limits, sizeof(limits));
+				(u8 *)limits, sizeof(limits));
 	if (ret < 0)
 		return ret;
 
 	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_ACPIRAM_FAN_ALERT,
-				sizeof(alert_flags), &alert_flags,
-				sizeof(alert_flags));
+				&alert_flags, sizeof(alert_flags));
 	if (ret < 0)
 		return ret;
 
@@ -139,7 +144,7 @@ static int imanager_hwmon_write_fan_alert(struct imanager_io_ops *io, int fnum,
 	int ret;
 
 	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_ACPIRAM_FAN_SPEED_LIMIT,
-				sizeof(limits), (u8 *)limits, sizeof(limits));
+				(u8 *)limits, sizeof(limits));
 	if (ret < 0)
 		return ret;
 
@@ -147,7 +152,7 @@ static int imanager_hwmon_write_fan_alert(struct imanager_io_ops *io, int fnum,
 	limit->max = swab16(alert->max);
 
 	return imanager_write_ram(io, EC_RAM_ACPI, EC_ACPIRAM_FAN_SPEED_LIMIT,
-				  sizeof(limits), (u8 *)limits);
+				  (u8 *)limits, sizeof(limits));
 }
 
 static int imanager_hwmon_read_adc(struct imanager_ec_data *ec, int fnum,
@@ -1309,11 +1314,6 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	int err;
 #endif
 
-	if (!pdev) {
-		dev_err(dev, "Invalid platform data\n");
-		return -EINVAL;
-	}
-
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
@@ -1345,9 +1345,9 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	hwmon_dev = hwmon_device_register(dev);
 	if (IS_ERR(hwmon_dev)) {
 		sysfs_remove_groups(&dev->kobj, data->groups);
-		return PTR_ERR(data->hwmon_dev);
+		return PTR_ERR(hwmon_dev);
 	}
-	data->hwmon_dev = hwmon_dev;
+	data->hwmon_device = hwmon_dev;
 #else
 	hwmon_dev = devm_hwmon_device_register_with_groups(dev,
 							   "imanager_hwmon",
@@ -1362,7 +1362,7 @@ static int imanager_hwmon_remove(struct platform_device *pdev)
 {
 	struct imanager_hwmon_data *data = dev_get_drvdata(&pdev->dev);
 
-	hwmon_device_unregister(data->hwmon_dev);
+	hwmon_device_unregister(data->hwmon_device);
 	sysfs_remove_groups(&pdev->dev.kobj, data->groups);
 
 	return 0;
@@ -1371,6 +1371,9 @@ static int imanager_hwmon_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_hwmon_driver = {
 	.driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+		.owner = THIS_MODULE,
+#endif
 		.name  = "imanager_hwmon",
 	},
 	.probe	= imanager_hwmon_probe,

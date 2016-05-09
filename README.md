@@ -124,7 +124,8 @@ The mode works for fan1-fan3.
 #### sysfs attributes
 
 	pwm[1-3]
-		This file stores PWM duty cycle or DC value (fan speed) in range:
+		This file stores PWM duty cycle or DC value (fan speed) in
+		range:
 			0: (stop)
 			255: (full)
 
@@ -175,11 +176,10 @@ Besides the required build tools e.g. gcc, make, and kernel development
 packages, the kernel also needs to have sub-drivers enabled depending
 on the desired features (MFD, GPIO, SYSFS, HWMON, and I2C).
 
-Off-the-shelf Linux distributions such as Fedora, Ubuntu, Debian etc. (you
-name it) usually provide support for a set of embedded features without
-having to customize the kernel.  Support for a certain feature can be
-verified by checking the kernel configuration file which is stored under
-/boot/ directory.
+Off-the-shelf Linux distributions such as Fedora, Ubuntu, Debian etc. usually
+provide support for a set of embedded features without having to customize the
+kernel.  Support for a certain feature can be verified by checking the kernel
+configuration file which is stored under /boot/ directory.
 
 - Multi-Function-Device (MFD) - required for iManager
 
@@ -197,22 +197,86 @@ verified by checking the kernel configuration file which is stored under
 
 		$ grep 'CONFIG_I2C=' /boot/config-$(uname -r)
 
-## Build Instructions
+
+## Build/Install Instructions
+
+Build and install those modules in off-the-shelf Linux distributions:
 
 - Modify Makefile.kbuild according to your requirements.
-- Remove 'm' at the end of a CONFIG_ line if the driver **should not** be built.
-- Build the drivers.
+- Remove 'm' at the end of a CONFIG_ line if the driver *should not* be built.
+- Build and install drivers (modules).
 
 		$ make
 
-	The drivers can be installed into the kernel driver tree with
+	Below command will build and install all drivers into the kernel driver
+	tree under a single sub-folder named '/extra/imanager'
 
-		$ make install
+		$ sudo make install
 
 	The drivers can be found at
 
-		/lib/modules/$(shell uname -r)/extra/imanager/
+		/lib/modules/current_kernel_release/extra/imanager/
 
-#### CentOS 6/7 Users Requiring Suppport for GPIO
+	Use the command *uname -r* to get the current kernel release
 
-Please see [README_CentOS.md](./README_CentOS.md) file for customizing a RHEL kernel.
+		/lib/modules/$(uname -r)/extra/imanager/
+
+
+## Loading and unloading modules
+
+Kernel modules are handled by tools such as *modprobe*, *insmod*, and *rmmod*.
+You can use these tools manually.
+
+- Using ***modprobe*** and ***modprobe -r***
+- Using ***insmod*** and ***rmmod***
+
+	To load imanager-core module (and its sub-platform drivers):
+
+		$ sudo modprobe *imanager-core*
+
+	This will load gpio, i2c, hwmon, backlight, and watchdog modules if
+	available.
+
+	To load imanager-core module by filename (if it is not already
+	installed in /lib/modules/$(uname -r)/extra/imanager/):
+
+		$ sudo insmod *imanager-core.ko*
+
+	To unload a module (gpio, i2c, etc.):
+
+		$ sudo modprobe -r *module_name*
+
+	Or, alternatively:
+
+		$ sudo rmmod *module_name*
+
+
+## Using GPIO from userspace
+
+The [Linux GPIO Sysfs Interface](https://www.kernel.org/doc/Documentation/gpio/sysfs.txt)
+provides a good source of information regarding GPIO usage through user-space.
+
+Some Linux OSes return a ***Permission denied*** even when using *sudo*
+command. In this case you would have to switch temporarily to root user.
+
+- On Debian based systems
+
+		$ sudo su
+
+- Or on Red Hat based systems
+
+		$ su
+
+	Export desired GPIO(s)
+
+		#> echo "248" > /sys/class/gpio/export
+
+	And then switch back to user
+
+		#> exit
+
+
+### CentOS 6/7 Users Requiring Support for GPIO
+
+Please see [README_CentOS.md](./README_CentOS.md) file for customizing a RHEL
+kernel.

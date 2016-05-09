@@ -1,5 +1,5 @@
 /*
- * Advantech iManager Hardware Monitoring core
+ * Advantech iManager Hardware Monitoring driver
  *
  * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -15,15 +15,8 @@
 
 #include <linux/types.h>
 
-#define HWM_MAX_ADC	5
-#define HWM_MAX_FAN	3
-
-/* Voltage computation (10-bit ADC, 0..3V input) */
-#define SCALE_IN	2933	/* (3000mV / (2^10 - 1)) * 1000 */
-
-#define HWM_STATUS_UNDEFINED_ITEM	2UL
-#define HWM_STATUS_UNDEFINED_DID	3UL
-#define HWM_STATUS_UNDEFINED_HWPIN	4UL
+#define HWM_MAX_ADC	5UL
+#define HWM_MAX_FAN	3UL
 
 enum fan_unit {
 	FAN_CPU,
@@ -83,7 +76,7 @@ struct fan_status {
  * FAN Control bit field                              *
  * enable:   0:Disabled, 1:Enabled                    *
  * type:     0:PWM,      1:RPM                        *
- * pulse:    0:Undefined 1:2 Pulse   2:4 Pulse        *
+ * pulse:    0:Undefined 1:2 Pulses  2:4 Pulses       *
  * tacho:    1:CPU FAN,  2:SYS FAN1, 3:SYS FAN2       *
  * mode:     0:Off,      1:Full,     2:Manual, 3:Auto *
  *- 7  6 ---- 5  4 --- 3  2 ----- 1 -------- 0 -------*

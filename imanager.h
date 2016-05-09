@@ -1,5 +1,5 @@
 /*
- * Advantech iManager MFD core
+ * Advantech iManager MFD
  *
  * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
@@ -23,10 +23,6 @@ struct imanager_device_data {
 	struct mutex lock;
 };
 
-struct imanager_platform_data {
-	const char *chip_name;
-};
-
 int imanager_read(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg);
 int imanager_write(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg);
 
@@ -36,9 +32,9 @@ int imanager_write8(struct imanager_io_ops *io, u8 cmd, u8 param, u8 byte);
 int imanager_read16(struct imanager_io_ops *io, u8 cmd, u8 param);
 int imanager_write16(struct imanager_io_ops *io, u8 cmd, u8 param, u16 word);
 
-int imanager_read_ram(struct imanager_io_ops *io, u8 bank, u8 offset, u8 len,
-		      u8 *buf, u8 bufsz);
-int imanager_write_ram(struct imanager_io_ops *io, u8 bank, u8 offset, u8 len,
-		       u8 *buf);
+int imanager_read_ram(struct imanager_io_ops *io, int ram_type, int offset,
+		      u8 *buf, u8 len);
+int imanager_write_ram(struct imanager_io_ops *io, int ram_type, int offset,
+		       u8 *data, u8 size);
 
 #endif

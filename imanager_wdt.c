@@ -21,6 +21,7 @@
 #include <linux/uaccess.h>
 #include <linux/watchdog.h>
 #include "imanager.h"
+#include "compat.h"
 
 #define WATCHDOG_TIMEOUT 30 /* in seconds */
 
@@ -278,11 +279,6 @@ static int imanager_wdt_probe(struct platform_device *pdev)
 	struct watchdog_device *wdt_dev;
 	int ret;
 
-	if (!pdev) {
-		dev_err(dev, "Invalid platform data\n");
-		return -EINVAL;
-	}
-
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
@@ -330,8 +326,7 @@ static int imanager_wdt_remove(struct platform_device *pdev)
 
 static void imanager_wdt_shutdown(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct imanager_device_data *imgr = dev_get_drvdata(dev->parent);
+	struct imanager_device_data *imgr = dev_get_drvdata(pdev->dev.parent);
 	struct imanager_io_ops *io = &imgr->ec.io;
 
 	mutex_lock(&imgr->lock);
@@ -343,6 +338,9 @@ static void imanager_wdt_shutdown(struct platform_device *pdev)
 
 static struct platform_driver imanager_wdt_driver = {
 	.driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+		.owner = THIS_MODULE,
+#endif
 		.name	= "imanager-wdt",
 	},
 	.probe	= imanager_wdt_probe,

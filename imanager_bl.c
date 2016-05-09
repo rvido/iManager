@@ -21,8 +21,8 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/slab.h>
-#include "compat.h"
 #include "imanager.h"
+#include "compat.h"
 
 #define BL_MAX_PWM	100
 
@@ -67,14 +67,13 @@ imanager_bd_set_crtl(struct imanager_ec_data *ec, unsigned unit, bool enable)
 	struct imanager_io_ops *io = &ec->io;
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, bl_unit, sizeof(val8), &val8,
-				sizeof(val8));
+	ret = imanager_read_ram(io, EC_RAM_ACPI, bl_unit, &val8, sizeof(val8));
 	if (ret < 0)
 		return ret;
 
 	ctrl->enable = enable ? 1 : 0;
 
-	return imanager_write_ram(io, EC_RAM_ACPI, devid, sizeof(val8), &val8);
+	return imanager_write_ram(io, EC_RAM_ACPI, devid, &val8, sizeof(val8));
 }
 
 static int
@@ -85,14 +84,14 @@ imanager_bl_set_polarity(struct imanager_io_ops *io, unsigned polarity)
 	int ret;
 
 	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_ACPIRAM_BLC_CTRL,
-				sizeof(val8), &val8, sizeof(val8));
+				&val8, sizeof(val8));
 	if (ret < 0)
 		return ret;
 
 	ctrl->blpol = polarity ? 1 : 0;
 
 	return imanager_write_ram(io, EC_RAM_ACPI, EC_ACPIRAM_BLC_CTRL,
-				  sizeof(val8), &val8);
+				  &val8, sizeof(val8));
 }
 
 static int imanager_get_brightness(struct backlight_device *bd)
@@ -199,11 +198,6 @@ static int imanager_backlight_probe(struct platform_device *pdev)
 	u8 devid = imgr->ec.idev.bl.attr[unit].did;
 	int ret;
 
-	if (!pdev) {
-		dev_err(dev, "Invalid platform data\n");
-		return -EINVAL;
-	}
-
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
@@ -234,8 +228,7 @@ static int imanager_backlight_probe(struct platform_device *pdev)
 
 static int imanager_backlight_remove(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct imanager_backlight_data *data = dev_get_drvdata(dev);
+	struct imanager_backlight_data *data = dev_get_drvdata(&pdev->dev);
 
 	backlight_device_unregister(data->bd);
 
@@ -244,6 +237,9 @@ static int imanager_backlight_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_backlight_driver = {
 	.driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+		.owner = THIS_MODULE,
+#endif
 		.name	= "imanager-backlight",
 	},
 	.probe	= imanager_backlight_probe,

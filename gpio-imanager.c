@@ -17,9 +17,8 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-#include <linux/version.h>
-#include "compat.h"
 #include "imanager.h"
+#include "compat.h"
 
 #define EC_GPIOF_DIR_OUT	BIT(6)
 #define EC_GPIOF_DIR_IN		BIT(7)
@@ -29,10 +28,6 @@ struct imanager_gpio_data {
 	struct gpio_chip chip;
 };
 
-/* ToDo: Remove to_imanager_gpio_data() as the API changed in kernel 4.5 and
-   now provides gpiochip_get_data(). However, gpiochip_get_data() still returns
-   a Null pointer - Expected to be fixed in 4.6+
- */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
 #undef gpiochip_get_data
 static inline struct imanager_gpio_data *
@@ -124,11 +119,6 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	struct gpio_chip *chip;
 	int ret;
 
-	if (!pdev) {
-		dev_err(dev, "Invalid platform data\n");
-		return -EINVAL;
-	}
-
 	gpio = devm_kzalloc(dev, sizeof(*gpio), GFP_KERNEL);
 	if (!gpio)
 		return -ENOMEM;
@@ -186,6 +176,9 @@ static int imanager_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_gpio_driver = {
 	.driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+		.owner = THIS_MODULE,
+#endif
 		.name	= "imanager-gpio",
 	},
 	.probe	= imanager_gpio_probe,
