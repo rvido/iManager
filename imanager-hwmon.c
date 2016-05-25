@@ -1016,6 +1016,14 @@ show_fan_label(struct device *dev, struct device_attribute *attr, char *buf)
 /*
  * Sysfs callback functions
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+static ssize_t
+show_name(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "imanager_hwmon\n");
+}
+static DEVICE_ATTR(name, S_IRUGO, show_name, NULL);
+#endif
 
 static SENSOR_DEVICE_ATTR(in0_label, S_IRUGO, show_in_label, NULL, 0);
 static SENSOR_DEVICE_ATTR(in0_input, S_IRUGO, show_in, NULL, 0);
@@ -1152,6 +1160,9 @@ static struct attribute *imanager_in_attributes[] = {
 	&sensor_dev_attr_in2_max.dev_attr.attr,
 	&sensor_dev_attr_in2_alarm.dev_attr.attr,
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
+	&dev_attr_name.attr,
+#endif
 	NULL
 };
 
