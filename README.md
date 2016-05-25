@@ -209,7 +209,7 @@ Build and install those modules in off-the-shelf Linux distributions:
 		$ make
 
 	Below command will build and install all drivers into the kernel driver
-	tree under a single sub-folder named '/extra/imanager'
+	tree under a single sub-folder named **/extra/imanager/**
 
 		$ sudo make install
 
@@ -217,7 +217,7 @@ Build and install those modules in off-the-shelf Linux distributions:
 
 		/lib/modules/current_kernel_release/extra/imanager/
 
-	Use the command *uname -r* to get the current kernel release
+	Use the command ***uname -r*** to get the current kernel release
 
 		/lib/modules/$(uname -r)/extra/imanager/
 
@@ -232,7 +232,7 @@ You can use these tools manually.
 
 	To load imanager-core module (and its sub-platform drivers):
 
-		$ sudo modprobe *imanager-core*
+		$ sudo modprobe imanager-core
 
 	This will load gpio, i2c, hwmon, backlight, and watchdog modules if
 	available.
@@ -240,18 +240,18 @@ You can use these tools manually.
 	To load imanager-core module by filename (if it is not already
 	installed in /lib/modules/$(uname -r)/extra/imanager/):
 
-		$ sudo insmod *imanager-core.ko*
+		$ sudo insmod imanager-core.ko
 
 	To unload a module (gpio, i2c, etc.):
 
-		$ sudo modprobe -r *module_name*
+		$ sudo modprobe -r <module name>
 
 	Or, alternatively:
 
-		$ sudo rmmod *module_name*
+		$ sudo rmmod <module name>
 
 
-## Using GPIO from userspace
+## Using GPIO from user-space
 
 The [Linux GPIO Sysfs Interface](https://www.kernel.org/doc/Documentation/gpio/sysfs.txt)
 provides a good source of information regarding GPIO usage through user-space.
