@@ -732,7 +732,7 @@ enum imanager_cells {
  */
 static const struct mfd_cell imanager_devs[] = {
 	[IMANAGER_BACKLIGHT] = {
-		.name = "imanager_bl",
+		.name = "imanager-backlight",
 	},
 	[IMANAGER_GPIO] = {
 		.name = "imanager-gpio",
@@ -744,7 +744,7 @@ static const struct mfd_cell imanager_devs[] = {
 		.name = "imanager-smbus",
 	},
 	[IMANAGER_WDT] = {
-		.name = "imanager_wdt",
+		.name = "imanager-wdt",
 	},
 };
 
