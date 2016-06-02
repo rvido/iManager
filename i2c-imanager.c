@@ -270,16 +270,18 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			msg.u.smb.hdr.wlen = 1;
 			msg.u.smb.hdr.cmd = command;
 			val = imanager_i2c_wr_combined(io, &msg);
+			if (val < 0)
+				ret = val;
 		} else {
 			msg.rlen = 1;
 			msg.u.smb.hdr.rlen = 1;
 			msg.u.smb.hdr.wlen = 0;
 			val = imanager_i2c_rw_combined(io, &msg);
+			if (val < 0)
+				ret = val;
+			else
+				smb_data->byte = val;
 		}
-		if (val < 0)
-			ret = val;
-		else
-			smb_data->byte = val;
 		break;
 	case I2C_SMBUS_BYTE_DATA:
 		if (read_write == I2C_SMBUS_WRITE) {
