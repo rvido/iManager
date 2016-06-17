@@ -1332,13 +1332,8 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	data->imgr = imgr;
 	platform_set_drvdata(pdev, data);
 
-	for (i = 0; i < hwmon->fan.num; i++) {
-		/* set fan to automatic speed control */
-		imanager_hwmon_write_fan_ctrl(ec, i, MODE_AUTO, CTRL_RPM, 0, 0,
-					      NULL, NULL);
-		/* update internal fan control settings */
+	for (i = 0; i < hwmon->fan.num; i++)
 		imanager_hwmon_read_fan_ctrl(ec, i, &data->hwmon_dev.fan[i]);
-	}
 
 	data->groups[num_attr_groups++] = &imanager_group_in;
 
