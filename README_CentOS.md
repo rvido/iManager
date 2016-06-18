@@ -12,7 +12,7 @@
 
 - Unpack kernel source file and change directory
 
-		$ rpm -i kernel-3.10.0-327.10.1.el7.src.rpm
+		$ rpm -i kernel-3.10.0-<release>.el7.src.rpm
 		$ cd rpmbuild/SPEC
 
 - Open kernel configuration file(s) with your favorite text editor (such as 'nano')
@@ -30,7 +30,7 @@
 
 		$ rpmbuild -bp --target $(uname -m) kernel.spec
 
-	This will most likely generate an error regarding unresolved configuration symbols.  Copy listed CONFIG_* lines into an editor and prefix '# ' and append 'is not set' on each line.  Add those lines then into your current kernel config file below GPIOLIB and GPIO_SYSFS entries.  Below is an example output of CentOS 7.2, kernel 3.10.0-327.10.1.el7.  Append those lines to the kernel configuration file according your architecture.
+	This will most likely generate an error regarding unresolved configuration symbols.  Copy listed CONFIG_* lines into an editor and prefix '# ' and append 'is not set' on each line.  Add those lines then into your current kernel config file below GPIOLIB and GPIO_SYSFS entries.  Below is an example output of CentOS 7.2, kernel 3.10.0-<release>.el7.  Append those lines to the kernel configuration file according your architecture.
 
 		# CONFIG_RFKILL_GPIO is not set
 		# CONFIG_TI_ST is not set
@@ -94,7 +94,7 @@
 
 	Verify the two kernel config options have been set.
 
-		$ grep -E 'GPIOLIB|GPIO_SYSFS' ../BUILD/kernel-3.10.0-327.10.1.el7/linux-3.10.0-327.10.1.el7.adv.1.x86_64/.config
+		$ grep -E 'GPIOLIB|GPIO_SYSFS' ../BUILD/kernel-3.10.0-<release>.el7/linux-3.10.0-<release>.el7.adv.1.x86_64/.config
 
 	The result should look like:
 
@@ -120,7 +120,7 @@
 
 	Also add a changelog entry like:
 
-		* Tue Mar 22 2016 John Doe <john.doe@email.com> - 3.10.0-327.10.1.el7.adv.1
+		* Tue Mar 22 2016 John Doe <john.doe@email.com> - 3.10.0-<release>.el7.adv.1
 		- Enable GPIOLIB and GPIO_SYSFS
 
 - Build kernel source package.
@@ -129,7 +129,7 @@
 
 - Move this new source code package to somewhere safe and clean up.
 
-		$ mv ../SRPMS/kernel-3.10.0-327.10.1.el7.adv.1.src.rpm ~/
+		$ mv ../SRPMS/kernel-3.10.0-<release>.el7.adv.1.src.rpm ~/
 		$ cd ~
 		$ rm -rf /path/to/rpmbuild
 
@@ -139,7 +139,7 @@
 
 	This may take a long time depending on build machine.
 
-		$ rpmbuild --rebuild --target $(uname -m) --without debug --without debuginfo --with headers kernel-3.10.0-327.10.1.el7.adv.1.src.rpm
+		$ rpmbuild --rebuild --target $(uname -m) --without debug --without debuginfo --with headers kernel-3.10.0-<release>.el7.adv.1.src.rpm
 
 	**CentOS 6** users will also have to **build a firmware package** in addition to the kernel packages
 
@@ -147,8 +147,12 @@
 
 ### Install New Kernel
 
-- Use 'dnf' (CentOS 7) or 'yum' (CentOS 6).
+- Use 'yum' package manager.
 
 	Avoid using 'rpm' as it would overwrite your kernel unless this is intended.
 
-		$ dnf install kernel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-headers-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-tools-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-tools-libs-3.10.0-327.10.1.el7.adv.1.x86_64.rpm kernel-devel-3.10.0-327.10.1.el7.adv.1.x86_64.rpm
+		$ yum install kernel-3.10.0-<release>.el7.adv.1.x86_64.rpm
+			kernel-headers-3.10.0-<release>.el7.adv.1.x86_64.rpm
+			kernel-tools-3.10.0-<release>.el7.adv.1.x86_64.rpm
+			kernel-tools-libs-3.10.0-<release>.el7.adv.1.x86_64.rpm
+			kernel-devel-3.10.0-<release>.el7.adv.1.x86_64.rpm
