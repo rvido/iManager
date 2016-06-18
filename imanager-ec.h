@@ -10,15 +10,14 @@
  * option) any later version.
  */
 
-#ifndef __IMANAGER_EC_H__
-#define __IMANAGER_EC_H__
+#ifndef _LINUX_MFD_IMANAGER_EC_H_
+#define _LINUX_MFD_IMANAGER_EC_H_
 
 #include <linux/types.h>
 
 /**
- * This is the delay time between two EC transactions.
- * Values lower than 200us are not encouraged and may
- * cause I/O errors
+ * EC_DELAY_MIN is the delay time between two EC transactions. Values lower
+ * than 200us are not encouraged and may cause I/O errors
  */
 #define EC_DELAY_MIN			200UL /* micro seconds */
 #define EC_DELAY_MAX			250UL
@@ -34,29 +33,34 @@
 #define IT8518_CMD_PORT			0x029E
 #define IT8518_DAT_PORT			0x029F
 
-#define EC_GPIO_MAX_NUM			8UL
-#define EC_HWM_MAX_ADC			5UL
-#define EC_HWM_MAX_FAN			3UL
-#define EC_BLC_MAX_NUM			2UL
-#define EC_SMB_MAX_NUM			4UL
-#define EC_WDT_MAX_NUM			2UL
+/* The Device ID registers - 16 bit */
+#define CHIP_DEVID_MSB			0x20
+#define CHIP_DEVID_LSB			0x21
 
-#define PCB_NAME_SIZE			32UL
+#define EC_MAX_GPIO_NUM			8UL
+#define EC_MAX_ADC_NUM			5UL
+#define EC_MAX_FAN_NUM			3UL
+#define EC_MAX_BLC_NUM			2UL
+#define EC_MAX_SMB_NUM			4UL
+#define EC_MAX_WDT_NUM			2UL
+
+#define PCB_NAME_SIZE			8UL
 #define EC_PAYLOAD_SIZE			40UL
 #define EC_MSG_SIZE			sizeof(struct ec_smb_message)
 #define EC_MSG_HDR_SIZE			sizeof(struct ec_smb_message_header)
 
 #define EC_MAX_DID			32UL
-#define DID_LABEL_SIZE			24UL
+#define EC_MAX_LABEL_SIZE		16UL
 
 #define LOBYTE16(x)			(x & 0x00FF)
 #define HIBYTE16(x)			(LOBYTE16(x >> 8))
 #define LOADDR16(x)			LOBYTE16(x)
-#define HIADDR16(x)			(x >= 0xF000 ? LOBYTE16(x >> 8) : 0)
+#define HIADDR16(x)			(x >= 0xF000 ? HIBYTE16(x) : 0)
 
 /*
  * iManager commands
  */
+#define EC_CMD_CHK_RDY			0UL
 #define EC_CMD_HWP_RD			0x11UL
 #define EC_CMD_HWP_WR			0x12UL
 #define EC_CMD_GPIO_DIR_RD		0x30UL
@@ -89,7 +93,7 @@
 #define EC_ACPIRAM_BRIGHTNESS1		0x50UL
 #define EC_ACPIRAM_BRIGHTNESS2		0x52UL
 #define EC_ACPIRAM_BLC_CTRL		0x99UL
-#define EC_ACPIRAM_FW_RELEASE_RD	0xF8UL
+#define EC_ACPIRAM_FW_RELEASE		0xF8UL
 
 /*
  * iManager flags and offsets
@@ -103,8 +107,7 @@
 
 #define EC_FLAG_OUTBUF			BIT(0)
 #define EC_FLAG_INBUF			BIT(1)
-
-#define EC_MSG_FLAG_HWMON		BIT(9)
+#define EC_FLAG_HWMON_MSG		BIT(9)
 
 #define EC_MSG_OFFSET_CMD		0UL
 #define EC_MSG_OFFSET_STATUS		1UL
@@ -112,36 +115,21 @@
 #define EC_MSG_OFFSET_DATA(N)		(3UL + N)
 #define EC_MSG_OFFSET_PAYLOAD(N)	(7UL + N)
 
-/* The Device ID registers - 16 bit */
-#define EC_DID_REG_MSB			0x20
-#define EC_DID_REG_LSB			0x21
-
-/*
- * IT8528 based firmware require a read/write command offset.
- */
+/* IT8528 based firmware require a read/write command offset. */
 #define EC_CMD_OFFSET_READ		0xA0UL
 #define EC_CMD_OFFSET_WRITE		0x50UL
 
 #define EC_STATUS_SUCCESS		BIT(0)
 #define EC_STATUS_CMD_COMPLETE		BIT(7)
 
-#define PCB_NAME_MAX_SIZE		8UL
-
 #define EC_KERNEL_MINOR(x)		(LOBYTE16(x))
-#define EC_KERNEL_MAJOR(x) ({		\
-	typeof(x) __x = (HIBYTE16(x));	\
-	((__x >> 4) * 10 + (__x & 0x000f)); })
+#define EC_KERNEL_MAJOR(x)		({ typeof(x) __x = (HIBYTE16(x)); \
+					((__x >> 4) * 10 + (__x & 0x000f)); })
 #define EC_FIRMWARE_MINOR(x)		(LOBYTE16(x))
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(LOBYTE16(x)))
 
 enum kinds { IT8518, IT8528 };
-
-enum ec_ram_type {
-	EC_RAM_ACPI = 1,
-	EC_RAM_HW,
-	EC_RAM_EXT
-};
 
 enum ec_device_type {
 	ADC = 1,
@@ -269,21 +257,21 @@ enum ec_device_table_type {
 	EC_DT_POL
 };
 
-struct ec_devtbl {
+struct ec_device_table {
 	int id;
 	int type;
 	int scale;
-	char label[DID_LABEL_SIZE];
+	char label[EC_MAX_LABEL_SIZE];
 };
 
-struct ec_dyn_devtbl {
-	int did;	/* Device ID */
-	int hwp;	/* Hardware Pin */
-	int pol;	/* Polarity */
-	const struct ec_devtbl *devtbl; /* Device table Entry */
+struct imanager_device_config {
+	unsigned did;	/* Device ID */
+	unsigned hwp;	/* Hardware Pin */
+	unsigned pol;	/* Polarity */
+	const struct ec_device_table *devtbl; /* Device Table Entry */
 };
 
-static const struct ec_devtbl devtbl[] = {
+static const struct ec_device_table devtbl[] = {
 	/* ID		Type	Scale	Label */
 	{ ALTGPIO0,	GPIO,	-1,	"gpio0" },
 	{ ALTGPIO1,	GPIO,	-1,	"gpio1" },
@@ -404,9 +392,9 @@ struct ec_version_raw {
 } __attribute__((__packed__));
 
 struct ec_message {
-	unsigned rlen;	/* EC message read length */
-	unsigned wlen;	/* EC message write length */
-	unsigned param;	/* Message parameter (offset, id, or unit) */
+	unsigned rlen;	/* Read length */
+	unsigned wlen;	/* Write length */
+	unsigned param;	/* Parameter (offset, id, or unit number) */
 	union {
 		struct ec_smb_message smb;
 		u8 data[EC_MSG_SIZE];
@@ -415,43 +403,28 @@ struct ec_message {
 	u8 *data;
 };
 
-struct ec_version {
-	unsigned kernel_major;
-	unsigned kernel_minor;
-	unsigned firmware_major;
-	unsigned firmware_minor;
-	unsigned type;
-};
-
-struct ec_info {
-	unsigned chipid;
-	enum kinds kind;
-	struct ec_version version;
-	char pcb_name[PCB_NAME_SIZE];
-};
-
 struct ec_dev_attr {
-	int did;	/* Device ID */
-	int hwp;	/* Hardware Pin number */
-	int pol;	/* Polarity */
-	int scale;	/* Scaling factor */
+	unsigned did;	/* Device ID */
+	unsigned hwp;	/* Hardware Pin number */
+	unsigned pol;	/* Polarity */
+	unsigned scale;	/* Scaling factor */
 	const char *label;
 };
 
 struct imanager_gpio_device {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_GPIO_MAX_NUM];
+	struct ec_dev_attr	attr[EC_MAX_GPIO_NUM];
 };
 
 struct ec_dev_adc {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_HWM_MAX_ADC];
+	struct ec_dev_attr	attr[EC_MAX_ADC_NUM];
 };
 
 struct ec_dev_fan {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_HWM_MAX_FAN];
-	const char		*temp_label[EC_HWM_MAX_FAN];
+	struct ec_dev_attr	attr[EC_MAX_FAN_NUM];
+	const char		*temp_label[EC_MAX_FAN_NUM];
 };
 
 struct imanager_hwmon_device {
@@ -461,45 +434,22 @@ struct imanager_hwmon_device {
 
 struct imanager_i2c_device {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_SMB_MAX_NUM];
+	struct ec_dev_attr	attr[EC_MAX_SMB_NUM];
 	struct ec_dev_attr	*eeprom;
 	struct ec_dev_attr	*i2coem;
 };
 
 struct imanager_backlight_device {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_BLC_MAX_NUM];
-	u8			brightness[EC_BLC_MAX_NUM];
+	struct ec_dev_attr	attr[EC_MAX_BLC_NUM];
+	u8			brightness[EC_MAX_BLC_NUM];
 };
 
 struct imanager_watchdog_device {
 	unsigned		num;
-	struct ec_dev_attr	attr[EC_WDT_MAX_NUM];
+	struct ec_dev_attr	attr[EC_MAX_WDT_NUM];
 	struct ec_dev_attr	*irq;
 	struct ec_dev_attr	*nmi;
-};
-
-struct imanager_device {
-	struct ec_info	info;
-
-	unsigned features;
-
-	struct imanager_gpio_device		gpio;
-	struct imanager_hwmon_device		hwmon;
-	struct imanager_i2c_device		i2c;
-	struct imanager_backlight_device	bl;
-	struct imanager_watchdog_device		wdt;
-};
-
-struct imanager_io_ops {
-	int (*read)(int cmd);
-	int (*write)(int cmd, int value);
-};
-
-struct imanager_ec_data {
-	struct imanager_io_ops io;
-	struct ec_dyn_devtbl dyn[EC_MAX_DID];
-	struct imanager_device idev;
 };
 
 #endif

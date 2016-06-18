@@ -20,13 +20,11 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/watchdog.h>
-#include "imanager.h"
 #include "compat.h"
+#include "imanager.h"
 
-#define WATCHDOG_TIMEOUT 30 /* in seconds */
-
-/* Timer resolution */
-#define WDT_FREQ	10 /* Hz */
+#define WDT_DEFAULT_TIMEOUT	30 /* seconds */
+#define WDT_FREQ		10 /* Hz */
 
 struct imanager_wdt_data {
 	struct imanager_device_data *imgr;
@@ -35,11 +33,11 @@ struct imanager_wdt_data {
 	unsigned timeout;
 };
 
-static uint timeout = WATCHDOG_TIMEOUT;
+static uint timeout = WDT_DEFAULT_TIMEOUT;
 module_param(timeout, uint, 0);
 MODULE_PARM_DESC(timeout,
 	"Watchdog timeout in seconds. 1 <= timeout <= 65534, default="
-	__MODULE_STRING(WATCHDOG_TIMEOUT) ".");
+	__MODULE_STRING(WDT_DEFAULT_TIMEOUT) ".");
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, 0);
@@ -258,8 +256,8 @@ static const struct watchdog_info imanager_wdt_info = {
 	.options		= WDIOF_SETTIMEOUT |
 				  WDIOF_KEEPALIVEPING |
 				  WDIOF_MAGICCLOSE,
-	.identity		= "imanager_wdt",
 	.firmware_version	= 0,
+	.identity		= "imanager-wdt",
 };
 
 static const struct watchdog_ops imanager_wdt_ops = {
@@ -288,7 +286,7 @@ static int imanager_wdt_probe(struct platform_device *pdev)
 	wdt_dev = &data->wdt;
 	wdt_dev->info		= &imanager_wdt_info;
 	wdt_dev->ops		= &imanager_wdt_ops;
-	wdt_dev->timeout	= WATCHDOG_TIMEOUT;
+	wdt_dev->timeout	= WDT_DEFAULT_TIMEOUT;
 	wdt_dev->min_timeout	= 1;
 	wdt_dev->max_timeout	= 0xfffe;
 
@@ -343,9 +341,9 @@ static struct platform_driver imanager_wdt_driver = {
 #endif
 		.name	= "imanager-wdt",
 	},
-	.probe	= imanager_wdt_probe,
-	.remove	= imanager_wdt_remove,
-	.shutdown = imanager_wdt_shutdown,
+	.probe		= imanager_wdt_probe,
+	.remove		= imanager_wdt_remove,
+	.shutdown	= imanager_wdt_shutdown,
 };
 
 module_platform_driver(imanager_wdt_driver);

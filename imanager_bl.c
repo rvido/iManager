@@ -21,13 +21,15 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/slab.h>
-#include "imanager.h"
 #include "compat.h"
+#include "imanager.h"
 
 #define BL_MAX_PWM	100
 
-#define BL_UNIT_1	0
-#define BL_UNIT_2	1
+enum backlight_units {
+	BL_UNIT_1 = 0,
+	BL_UNIT_2,
+};
 
 static bool polarity = PWM_POLARITY_NORMAL;
 module_param(polarity, bool, 0);
@@ -56,13 +58,12 @@ struct backlight_ctrl {
 		 dnc	: 5;	/* Don't care		    - bit [7..3] */
 };
 
-static int
-imanager_bl_enable(struct imanager_ec_data *ec, unsigned unit)
+static int imanager_bl_enable(struct imanager_ec_data *ec, int unit)
 {
 	u8 val8;
 	struct brightness_level *ctrl = (struct brightness_level *)&val8;
-	u8 devid = ec->idev.bl.attr[unit].did;
-	u8 bl_unit = ec->idev.bl.brightness[unit];
+	u8 devid = ec->bl.attr[unit].did;
+	u8 bl_unit = ec->bl.brightness[unit];
 	struct imanager_io_ops *io = &ec->io;
 	int ret;
 
@@ -93,12 +94,12 @@ imanager_bl_set_polarity(struct imanager_io_ops *io, unsigned polarity)
 				  &val8, sizeof(val8));
 }
 
-static int imanager_get_brightness(struct backlight_device *bl)
+static int imanager_bl_get_brightness(struct backlight_device *bl)
 {
 	struct imanager_backlight_data *data = bl_get_data(bl);
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_io_ops *io = &imgr->ec.io;
-	u8 devid = imgr->ec.idev.bl.attr[unit].did;
+	u8 devid = imgr->ec.bl.attr[unit].did;
 	int pwm;
 
 	mutex_lock(&imgr->lock);
@@ -114,12 +115,12 @@ static int imanager_get_brightness(struct backlight_device *bl)
 	return (polarity ? BL_MAX_PWM - pwm : pwm);
 }
 
-static int imanager_set_brightness(struct backlight_device *bl)
+static int imanager_bl_set_brightness(struct backlight_device *bl)
 {
 	struct imanager_backlight_data *data = bl_get_data(bl);
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_io_ops *io = &imgr->ec.io;
-	u8 devid = imgr->ec.idev.bl.attr[unit].did;
+	u8 devid = imgr->ec.bl.attr[unit].did;
 	u8 brightness = bl->props.brightness;
 	int ret;
 
@@ -132,7 +133,7 @@ static int imanager_set_brightness(struct backlight_device *bl)
 	if (bl->props.state & BL_CORE_SUSPENDED)
 		brightness = 0;
 
-	/* if polarity is set, invert brightness */
+	/* invert brightness if polarity is set */
 	brightness = polarity ? BL_MAX_PWM - brightness : brightness;
 
 	mutex_lock(&imgr->lock);
@@ -152,11 +153,11 @@ static struct backlight_ops imanager_bl_ops = {
 static const struct backlight_ops imanager_bl_ops = {
 #endif
 	.options = BL_CORE_SUSPENDRESUME,
-	.get_brightness = imanager_get_brightness,
-	.update_status  = imanager_set_brightness,
+	.get_brightness = imanager_bl_get_brightness,
+	.update_status  = imanager_bl_set_brightness,
 };
 
-static int imanager_backlight_init(struct device *dev,
+static int imanager_bl_init(struct device *dev,
 				   struct imanager_backlight_data *data)
 {
 	struct backlight_device *bl;
@@ -200,12 +201,12 @@ static int imanager_backlight_init(struct device *dev,
 	return 0;
 }
 
-static int imanager_backlight_probe(struct platform_device *pdev)
+static int imanager_bl_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct imanager_device_data *imgr = dev_get_drvdata(dev->parent);
 	struct imanager_backlight_data *data;
-	u8 devid = imgr->ec.idev.bl.attr[unit].did;
+	u8 devid = imgr->ec.bl.attr[unit].did;
 	int ret;
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
@@ -214,7 +215,7 @@ static int imanager_backlight_probe(struct platform_device *pdev)
 
 	data->imgr = imgr;
 
-	ret = imanager_backlight_init(dev, data);
+	ret = imanager_bl_init(dev, data);
 	if (ret)
 		return ret;
 
@@ -237,7 +238,7 @@ static int imanager_backlight_probe(struct platform_device *pdev)
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
-static int imanager_backlight_remove(struct platform_device *pdev)
+static int imanager_bl_remove(struct platform_device *pdev)
 {
 	struct imanager_backlight_data *data = dev_get_drvdata(&pdev->dev);
 
@@ -254,9 +255,9 @@ static struct platform_driver imanager_backlight_driver = {
 #endif
 		.name	= "imanager-backlight",
 	},
-	.probe	= imanager_backlight_probe,
+	.probe	= imanager_bl_probe,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
-	.remove = imanager_backlight_remove,
+	.remove = imanager_bl_remove,
 #endif
 };
 

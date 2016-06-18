@@ -15,9 +15,6 @@
 
 #include <linux/types.h>
 
-#define HWM_MAX_ADC	5UL
-#define HWM_MAX_FAN	3UL
-
 enum fan_unit {
 	FAN_CPU,
 	FAN_SYS1,
@@ -140,11 +137,6 @@ struct imanager_hwmon_smartfan {
 
 	struct hwm_sensors_limit limit;
 	struct hwm_fan_alert	 alert;
-};
-
-struct imanager_hwmon_devdata {
-	struct imanager_hwmon_adc	adc[HWM_MAX_ADC];
-	struct imanager_hwmon_smartfan	fan[HWM_MAX_FAN];
 };
 
 #endif
