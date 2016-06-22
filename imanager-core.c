@@ -58,10 +58,9 @@ enum ec_io_buffer_state {
 	OUTBUF_RDY,
 };
 
-static inline int check_xfer_ready(unsigned bit, unsigned state)
+static inline int check_xfer_ready(uint bit, uint state)
 {
-	int i = 0;
-	volatile int reg;
+	int reg, i = 0;
 
 	do {
 		reg = inb(IT8528_CMD_PORT);
@@ -262,7 +261,7 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 		},
 	};
 	struct imanager_device_config *cfg;
-	unsigned i, j;
+	uint i, j;
 	int ret;
 
 	/* Read iManager device configurations */
@@ -289,7 +288,7 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 	return 0;
 }
 
-static inline void data_to_ec(struct imanager_io_ops *io, u8* data, u8 len)
+static inline void data_to_ec(struct imanager_io_ops *io, u8 *data, u8 len)
 {
 	int i, j;
 
@@ -298,7 +297,7 @@ static inline void data_to_ec(struct imanager_io_ops *io, u8* data, u8 len)
 }
 
 static inline void
-data_from_ec(struct imanager_io_ops *io, u8* data, u8 len, int offset)
+data_from_ec(struct imanager_io_ops *io, u8 *data, u8 len, int offset)
 {
 	int i;
 
@@ -728,7 +727,7 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 {
 	struct imanager_info *info = &ec->info;
 	struct imanager_io_ops *io = &ec->io;
-	unsigned val, len = PCB_NAME_SIZE;
+	uint val, len = PCB_NAME_SIZE;
 	struct ec_message msg = {
 		.rlen = ARRAY_SIZE(info->pcb_name) - 1,
 		.wlen = 0,

@@ -58,7 +58,9 @@ static int imanager_hwmon_read_fan_config(struct imanager_io_ops *io, int fnum,
 		.param = fnum,
 		.data = (u8 *)cfg,
 	};
-	int ret = imanager_read(io, EC_CMD_FAN_CTL_RD, &msg);
+	int ret;
+
+	ret = imanager_read(io, EC_CMD_FAN_CTL_RD, &msg);
 	if (ret)
 		return ret;
 
@@ -190,7 +192,7 @@ static int imanager_hwmon_read_fan_ctrl(struct imanager_ec_data *ec, int fnum,
 	fan->pulse = ctrl->pulse;
 	fan->type = ctrl->type;
 
-	fan->temp = cfg.temp; /* Read thermal zone temp */
+	fan->temp = cfg.temp; /* Thermal zone temp */
 
 	/*
 	 * It seems that fan->mode does not always report the correct
@@ -309,12 +311,12 @@ imanager_hwmon_write_fan_ctrl(struct imanager_ec_data *ec, int fnum, int fmode,
 	return 0;
 }
 
-static inline unsigned in_from_reg(u16 val)
+static inline uint in_from_reg(u16 val)
 {
 	return clamp_val(DIV_ROUND_CLOSEST(val * SCALE_IN, 1000), 0, 65535);
 }
 
-static inline u16 in_to_reg(unsigned val)
+static inline u16 in_to_reg(uint val)
 {
 	return clamp_val(DIV_ROUND_CLOSEST(val * 1000, SCALE_IN), 0, 65535);
 }
@@ -605,8 +607,8 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 	imanager_hwmon_read_fan_config(io, nr, &cfg);
 	cfg.rpm_min = swab16(val);
 	imanager_hwmon_write_fan_config(io, nr, &cfg);
-/* ToDo: store new settings rather than reading it back from EC */
-	imanager_hwmon_read_fan_ctrl(ec, nr, fan); /* update */
+
+	imanager_hwmon_read_fan_ctrl(ec, nr, fan);
 
 	mutex_unlock(&imgr->lock);
 
@@ -639,6 +641,7 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 	imanager_hwmon_read_fan_config(io, nr, &cfg);
 	cfg.rpm_max = swab16(val);
 	imanager_hwmon_write_fan_config(io, nr, &cfg);
+
 	imanager_hwmon_read_fan_ctrl(&imgr->ec, nr, fan);
 
 	mutex_unlock(&imgr->lock);
@@ -718,7 +721,7 @@ show_pwm_enable(struct device *dev, struct device_attribute *attr, char *buf)
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
-	unsigned mode = fan->mode - 1;
+	uint mode = fan->mode - 1;
 
 	if (fan->mode == MODE_OFF)
 		mode = 0;
@@ -770,7 +773,7 @@ show_pwm_mode(struct device *dev, struct device_attribute *attr, char *buf)
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
-	unsigned type = (fan->type == CTRL_PWM) ? 1 : 0;
+	uint type = (fan->type == CTRL_PWM) ? 1 : 0;
 
 	if (fan->mode == MODE_OFF)
 		type = 0;
@@ -855,7 +858,7 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	/* temperatur in 1/10 degC */
+	/* temperature in 1/10 degC */
 	val = DIV_ROUND_CLOSEST(val, 1000);
 	val = val > 100 ? 100 : val;
 
@@ -877,6 +880,7 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 	cfg.temp_stop = val;
 	cfg.temp_min = val;
 	imanager_hwmon_write_fan_config(io, nr, &cfg);
+
 	imanager_hwmon_read_fan_ctrl(&imgr->ec, nr, fan);
 
 	mutex_unlock(&imgr->lock);
@@ -913,6 +917,7 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 	imanager_hwmon_read_fan_config(io, nr, &cfg);
 	cfg.temp_max = val;
 	imanager_hwmon_write_fan_config(io, nr, &cfg);
+
 	imanager_hwmon_read_fan_ctrl(&imgr->ec, nr, fan);
 
 	mutex_unlock(&imgr->lock);

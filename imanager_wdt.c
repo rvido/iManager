@@ -30,7 +30,7 @@ struct imanager_wdt_data {
 	struct imanager_device_data *imgr;
 	struct watchdog_device wdt;
 	ulong last_updated;
-	unsigned timeout;
+	uint timeout;
 };
 
 static uint timeout = WDT_DEFAULT_TIMEOUT;
@@ -75,9 +75,9 @@ struct event_delay {
 } __attribute__((__packed__));
 
 static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
-			     int event_type, unsigned timeout)
+			     int event_type, uint timeout)
 {
-	unsigned val;
+	uint val;
 	int ret;
 	struct ec_message msg = {
 		.rlen = 0,
@@ -142,7 +142,7 @@ static inline int imanager_wdt_disable_all(struct imanager_wdt_data *data)
 		imanager_wdt_ctrl(io, STOPBOOT, WDT_EVT_NONE, 0));
 }
 
-static int imanager_wdt_set(struct imanager_wdt_data *data, unsigned timeout)
+static int imanager_wdt_set(struct imanager_wdt_data *data, uint timeout)
 {
 	struct imanager_io_ops *io = &data->imgr->ec.io;
 	int ret;
@@ -180,10 +180,10 @@ static int imanager_wdt_set_timeout(struct watchdog_device *wdt, uint timeout)
 	return ret;
 }
 
-static unsigned imanager_wdt_get_timeleft(struct watchdog_device *wdt)
+static uint imanager_wdt_get_timeleft(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
-	unsigned timeleft = 0;
+	uint timeleft = 0;
 	ulong time_diff = ((jiffies - data->last_updated) / HZ);
 
 	if (data->last_updated && (data->timeout > time_diff))

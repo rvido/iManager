@@ -47,15 +47,15 @@ struct imanager_backlight_data {
 };
 
 struct brightness_level {
-	unsigned value	: 7,	/* Brightness Value  - LSB [6..0] */
-		 enable	: 1;	/* Brightness Enable - MSB [7] */
+	uint value	: 7,	/* Brightness Value  - LSB [6..0] */
+	     enable	: 1;	/* Brightness Enable - MSB [7] */
 };
 
 struct backlight_ctrl {
-	unsigned enable	: 1,	/* Backlight Control Enable - LSB [0] */
-		 pwmpol	: 1,	/* PWM Polarity		    - bit [1] */
-		 blpol	: 1,	/* Backlight Polarity	    - bit [2] */
-		 dnc	: 5;	/* Don't care		    - bit [7..3] */
+	uint enable	: 1,	/* Backlight Control Enable - LSB [0] */
+	     pwmpol	: 1,	/* PWM Polarity		    - bit [1] */
+	     blpol	: 1,	/* Backlight Polarity	    - bit [2] */
+	     dnc	: 5;	/* Don't care		    - bit [7..3] */
 };
 
 static int imanager_bl_enable(struct imanager_ec_data *ec, int unit)
@@ -76,8 +76,7 @@ static int imanager_bl_enable(struct imanager_ec_data *ec, int unit)
 	return imanager_write_ram(io, EC_RAM_ACPI, devid, &val8, sizeof(val8));
 }
 
-static int
-imanager_bl_set_polarity(struct imanager_io_ops *io, unsigned polarity)
+static int imanager_bl_set_polarity(struct imanager_io_ops *io, uint polarity)
 {
 	u8 val8;
 	struct backlight_ctrl *ctrl = (struct backlight_ctrl *)&val8;
@@ -112,7 +111,7 @@ static int imanager_bl_get_brightness(struct backlight_device *bl)
 
 	mutex_unlock(&imgr->lock);
 
-	return (polarity ? BL_MAX_PWM - pwm : pwm);
+	return polarity ? BL_MAX_PWM - pwm : pwm;
 }
 
 static int imanager_bl_set_brightness(struct backlight_device *bl)

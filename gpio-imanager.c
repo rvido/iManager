@@ -38,7 +38,7 @@ to_imanager_gpio_data(struct gpio_chip *chip)
 #define gpiochip_get_data(chip) to_imanager_gpio_data(chip)
 #endif
 
-static int imanager_gpio_direction_in(struct gpio_chip *chip, unsigned offset)
+static int imanager_gpio_direction_in(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
@@ -53,7 +53,7 @@ static int imanager_gpio_direction_in(struct gpio_chip *chip, unsigned offset)
 }
 
 static int
-imanager_gpio_direction_out(struct gpio_chip *chip, unsigned offset, int val)
+imanager_gpio_direction_out(struct gpio_chip *chip, uint offset, int val)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
@@ -68,23 +68,23 @@ imanager_gpio_direction_out(struct gpio_chip *chip, unsigned offset, int val)
 }
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3,8,0)
-static int imanager_gpio_get_direction(struct gpio_chip *chip, unsigned offset)
+static int imanager_gpio_get_direction(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_io_ops *io = &imgr->ec.io;
 	int gpio_did = imgr->ec.gpio.attr[offset].did;
-        int ret;
+	int ret;
 
 	mutex_lock(&imgr->lock);
 	ret = imanager_read8(io, EC_CMD_GPIO_DIR_RD, gpio_did);
 	mutex_unlock(&imgr->lock);
 
-        return (ret & EC_GPIOF_DIR_IN ? GPIOF_DIR_IN : GPIOF_DIR_OUT);
+	return ret & EC_GPIOF_DIR_IN ? GPIOF_DIR_IN : GPIOF_DIR_OUT;
 }
 #endif
 
-static int imanager_gpio_get(struct gpio_chip *chip, unsigned offset)
+static int imanager_gpio_get(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
@@ -99,7 +99,7 @@ static int imanager_gpio_get(struct gpio_chip *chip, unsigned offset)
 	return !!ret;
 }
 
-static void imanager_gpio_set(struct gpio_chip *chip, unsigned offset, int val)
+static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;

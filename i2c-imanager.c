@@ -114,9 +114,8 @@ static int imanager_i2c_wait_proc_complete(struct imanager_io_ops *io)
 	return -EIO;
 }
 
-static int
-imanager_i2c_block_wr_rw_combined(struct imanager_io_ops *io, unsigned proto,
-				  struct ec_message *msg)
+static int imanager_i2c_block_wr_rw_combined(struct imanager_io_ops *io,
+					     uint proto, struct ec_message *msg)
 {
 	int ret;
 
@@ -146,7 +145,7 @@ imanager_i2c_block_wr_rw_combined(struct imanager_io_ops *io, unsigned proto,
 #define imanager_i2c_rw_combined(io, message) \
 	imanager_i2c_block_wr_rw_combined(io, EC_CMD_I2C_RW, message)
 
-static int imanager_i2c_read_freq(struct imanager_io_ops *io, unsigned bus_id)
+static int imanager_i2c_read_freq(struct imanager_io_ops *io, uint bus_id)
 {
 	int ret = 0, f;
 	int freq_id, freq;
@@ -177,10 +176,10 @@ static int imanager_i2c_read_freq(struct imanager_io_ops *io, unsigned bus_id)
 	return freq;
 }
 
-static int imanager_i2c_write_freq(struct imanager_io_ops *io, unsigned bus_id,
-				   unsigned freq)
+static int
+imanager_i2c_write_freq(struct imanager_io_ops *io, uint bus_id, uint freq)
 {
-	unsigned val;
+	uint val;
 
 	switch (freq) {
 	case 50:

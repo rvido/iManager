@@ -15,10 +15,7 @@
 
 #include <linux/types.h>
 
-/**
- * EC_DELAY_MIN is the delay time between two EC transactions. Values lower
- * than 200us are not encouraged and may cause I/O errors
- */
+/* Delay time - message polling */
 #define EC_DELAY_MIN			200UL /* micro seconds */
 #define EC_DELAY_MAX			250UL
 #define EC_MAX_RETRY			400UL
@@ -33,7 +30,7 @@
 #define IT8518_CMD_PORT			0x029E
 #define IT8518_DAT_PORT			0x029F
 
-/* The Device ID registers - 16 bit */
+/* 16-bit device ID registers */
 #define CHIP_DEVID_MSB			0x20
 #define CHIP_DEVID_LSB			0x21
 
@@ -265,9 +262,9 @@ struct ec_device_table {
 };
 
 struct imanager_device_config {
-	unsigned did;	/* Device ID */
-	unsigned hwp;	/* Hardware Pin */
-	unsigned pol;	/* Polarity */
+	unsigned int did;	/* Device ID */
+	unsigned int hwp;	/* Hardware Pin */
+	unsigned int pol;	/* Polarity */
 	const struct ec_device_table *devtbl; /* Device Table Entry */
 };
 
@@ -392,9 +389,9 @@ struct ec_version_raw {
 } __attribute__((__packed__));
 
 struct ec_message {
-	unsigned rlen;	/* Read length */
-	unsigned wlen;	/* Write length */
-	unsigned param;	/* Parameter (offset, id, or unit number) */
+	unsigned int rlen;	/* Read length */
+	unsigned int wlen;	/* Write length */
+	unsigned int param;	/* Parameter (offset, id, or unit number) */
 	union {
 		struct ec_smb_message smb;
 		u8 data[EC_MSG_SIZE];
@@ -404,25 +401,25 @@ struct ec_message {
 };
 
 struct ec_dev_attr {
-	unsigned did;	/* Device ID */
-	unsigned hwp;	/* Hardware Pin number */
-	unsigned pol;	/* Polarity */
-	unsigned scale;	/* Scaling factor */
+	unsigned int did;	/* Device ID */
+	unsigned int hwp;	/* Hardware Pin number */
+	unsigned int pol;	/* Polarity */
+	unsigned int scale;	/* Scaling factor */
 	const char *label;
 };
 
 struct imanager_gpio_device {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_GPIO_NUM];
 };
 
 struct ec_dev_adc {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_ADC_NUM];
 };
 
 struct ec_dev_fan {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_FAN_NUM];
 	const char		*temp_label[EC_MAX_FAN_NUM];
 };
@@ -433,20 +430,20 @@ struct imanager_hwmon_device {
 };
 
 struct imanager_i2c_device {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_SMB_NUM];
 	struct ec_dev_attr	*eeprom;
 	struct ec_dev_attr	*i2coem;
 };
 
 struct imanager_backlight_device {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_BLC_NUM];
 	u8			brightness[EC_MAX_BLC_NUM];
 };
 
 struct imanager_watchdog_device {
-	unsigned		num;
+	unsigned int		num;
 	struct ec_dev_attr	attr[EC_MAX_WDT_NUM];
 	struct ec_dev_attr	*irq;
 	struct ec_dev_attr	*nmi;

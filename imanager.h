@@ -27,10 +27,10 @@
  * @pcb_name:		PC board name
  */
 struct imanager_info {
-	unsigned kernel_major;
-	unsigned kernel_minor;
-	unsigned firmware_major;
-	unsigned firmware_minor;
+	unsigned int kernel_major;
+	unsigned int kernel_minor;
+	unsigned int firmware_major;
+	unsigned int firmware_minor;
 	const char *type;
 	char pcb_name[EC_MAX_LABEL_SIZE];
 };
@@ -57,7 +57,7 @@ struct imanager_io_ops {
  * @wdt:	iManager Watchdog device structure
  */
 struct imanager_ec_data {
-	unsigned features;
+	unsigned int features;
 	struct imanager_device_config		cfg[EC_MAX_DID];
 	struct imanager_io_ops			io;
 	struct imanager_gpio_device		gpio;
