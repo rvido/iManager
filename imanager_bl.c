@@ -191,7 +191,7 @@ static int imanager_bl_init(struct device *dev,
 	data->bl = bl;
 #endif
 
-	bl->props.brightness = BL_MAX_PWM;
+	bl->props.brightness = imanager_bl_get_brightness(bl);
 	bl->props.max_brightness = BL_MAX_PWM;
 	bl->props.power = FB_BLANK_UNBLANK;
 
@@ -227,11 +227,6 @@ static int imanager_bl_probe(struct platform_device *pdev)
 	ret = imanager_bl_set_polarity(&imgr->ec.io, polarity);
 	if (ret < 0)
 		dev_warn(dev, "Could not set backlight polarity\n");
-
-	/* Set brightness to maximum */
-	ret = imanager_write8(&imgr->ec.io, EC_CMD_HWP_WR, devid, BL_MAX_PWM);
-	if (ret < 0)
-		dev_warn(dev, "Failed while writing PWM\n");
 
 	return 0;
 }
