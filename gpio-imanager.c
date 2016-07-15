@@ -1,7 +1,7 @@
 /*
  * Advantech iManager GPIO driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
+ * Copyright (C) 2016 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -12,11 +12,12 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/device.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <linux/slab.h>
 #include "compat.h"
 #include "imanager.h"
 
