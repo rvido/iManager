@@ -29,7 +29,7 @@ hand-off to the caller.
 
 	Advantech EC based on ITE IT8528
 	Prefix: imanager
-	Addresses: 0x0299/0x029a
+	Addresses: 0x029a/0x0299
 	Datasheet: Available from ITE upon request
 
 Driver name: ***imanager***
