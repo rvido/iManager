@@ -1,7 +1,7 @@
 /*
  * Advantech iManager Watchdog driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
+ * Copyright (C) 2016 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -12,13 +12,13 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/bitops.h>
+#include <linux/byteorder/generic.h>
+#include <linux/device.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
-#include <linux/notifier.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <linux/reboot.h>
-#include <linux/types.h>
-#include <linux/uaccess.h>
 #include <linux/watchdog.h>
 #include "compat.h"
 #include "imanager.h"
@@ -45,14 +45,7 @@ MODULE_PARM_DESC(nowayout,
 	"Watchdog cannot be stopped once started (default="
 	__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
-enum wdt_ctrl {
-	START = 1,
-	STOP,
-	RST,
-	GET_TIMEOUT,
-	SET_TIMEOUT,
-	STOPBOOT = 8,
-};
+enum wdt_ctrl { START = 1, STOP, RST, GET_TIMEOUT, SET_TIMEOUT, STOPBOOT = 8 };
 
 enum imanager_wdt_event {
 	WDT_EVT_NONE,
@@ -92,7 +85,7 @@ static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
 		memset(event, 0xff, sizeof(*event));
 		msg.wlen = sizeof(*event);
 		*fevent = 0;
-		val = (!timeout) ? 0xffff : swab16(timeout * WDT_FREQ);
+		val = (!timeout) ? 0xffff : cpu_to_be16(timeout * WDT_FREQ);
 
 		switch (event_type) {
 		case WDT_EVT_DELAY:
@@ -131,7 +124,7 @@ static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
 	if (ret < 0)
 		return ret;
 
-	return timeout;
+	return 0;
 }
 
 static inline int imanager_wdt_disable_all(struct imanager_wdt_data *data)
@@ -170,11 +163,7 @@ static int imanager_wdt_set_timeout(struct watchdog_device *wdt, uint timeout)
 	int ret;
 
 	mutex_lock(&imgr->lock);
-
 	ret = imanager_wdt_set(data, timeout);
-	if (ret < 0)
-		dev_warn(wdt->parent, "Could not set timeout\n");
-
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -200,13 +189,8 @@ static int imanager_wdt_start(struct watchdog_device *wdt)
 	int ret;
 
 	mutex_lock(&imgr->lock);
-
 	ret = imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
-	if (ret < 0)
-		dev_warn(wdt->parent, "Could not start timer\n");
-
 	data->last_updated = jiffies;
-
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -220,13 +204,8 @@ static int imanager_wdt_stop(struct watchdog_device *wdt)
 	int ret;
 
 	mutex_lock(&imgr->lock);
-
 	ret = imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
-	if (ret < 0)
-		dev_warn(wdt->parent, "Could not stop timer\n");
-
 	data->last_updated = 0;
-
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -240,13 +219,8 @@ static int imanager_wdt_ping(struct watchdog_device *wdt)
 	int ret;
 
 	mutex_lock(&imgr->lock);
-
 	ret = imanager_wdt_ctrl(io, RST, WDT_EVT_NONE, 0);
-	if (ret < 0)
-		dev_warn(wdt->parent, "Could not reset timer\n");
-
 	data->last_updated = jiffies;
-
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -328,9 +302,7 @@ static void imanager_wdt_shutdown(struct platform_device *pdev)
 	struct imanager_io_ops *io = &imgr->ec.io;
 
 	mutex_lock(&imgr->lock);
-
 	imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
-
 	mutex_unlock(&imgr->lock);
 }
 
