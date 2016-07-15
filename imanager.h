@@ -1,7 +1,7 @@
 /*
  * Advantech iManager MFD
  *
- * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
+ * Copyright (C) 2016 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -14,7 +14,6 @@
 #define _LINUX_MFD_IMANAGER_H_
 
 #include <linux/mutex.h>
-#include <linux/types.h>
 #include "imanager-ec.h"
 
 /**
@@ -81,11 +80,7 @@ struct imanager_device_data {
 	struct mutex		lock;
 };
 
-enum ec_ram_type {
-	EC_RAM_ACPI = 1,
-	EC_RAM_HW,
-	EC_RAM_EXT
-};
+enum ec_ram_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };
 
 int imanager_read(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg);
 int imanager_write(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg);
