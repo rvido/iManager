@@ -1,7 +1,7 @@
 /*
  * Advantech iManager SMBus bus driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
+ * Copyright (C) 2016 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -12,12 +12,13 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <linux/slab.h>
 #include "compat.h"
 #include "imanager.h"
 
@@ -41,18 +42,6 @@ static uint bus_frequency = 100;
 module_param(bus_frequency, uint, 0);
 MODULE_PARM_DESC(bus_frequency,
 	"SMBus bus frequency [50, 100, 400]kHz (defaults to 100kHz)");
-
-/* Used for setting SMBus frequency */
-enum smb_bus_id {
-	SMB_OEM_0 = 0x28,
-	SMB_OEM_1,
-	SMB_OEM_2,
-	SMB_EEPROM,
-	SMB_TH_0,
-	SMB_TH_1,
-	SMB_SECURITY_EEPROM,
-	I2C_OEM_1,
-};
 
 struct ec_i2c_status {
 	u32 error	: 7;
@@ -139,12 +128,6 @@ static int imanager_i2c_block_wr_rw_combined(struct imanager_io_ops *io,
 	return 0;
 }
 
-#define imanager_i2c_wr_combined(io, message) \
-	imanager_i2c_block_wr_rw_combined(io, EC_CMD_I2C_WR, message)
-
-#define imanager_i2c_rw_combined(io, message) \
-	imanager_i2c_block_wr_rw_combined(io, EC_CMD_I2C_RW, message)
-
 static int imanager_i2c_read_freq(struct imanager_io_ops *io, uint bus_id)
 {
 	int ret = 0, f;
@@ -200,6 +183,12 @@ imanager_i2c_write_freq(struct imanager_io_ops *io, uint bus_id, uint freq)
 
 	return imanager_write16(io, EC_CMD_SMB_FREQ_WR, bus_id, val);
 }
+
+#define imanager_i2c_wr_combined(io, message) \
+	imanager_i2c_block_wr_rw_combined(io, EC_CMD_I2C_WR, message)
+
+#define imanager_i2c_rw_combined(io, message) \
+	imanager_i2c_block_wr_rw_combined(io, EC_CMD_I2C_RW, message)
 
 static int imanager_i2c_read_block(struct imanager_io_ops *io,
 				   struct ec_message *msg, u8 *buf)
@@ -274,6 +263,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			if (val < 0)
 				ret = val;
 		} else {
+			if (!smb_data) {
+				ret = -EINVAL;
+				break;
+			}
 			msg.rlen = 1;
 			smb->hdr.rlen = 1;
 			smb->hdr.wlen = 0;
@@ -285,6 +278,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			break;
 		}
 	case I2C_SMBUS_BYTE_DATA:
+		if (!smb_data) {
+			ret = -EINVAL;
+			break;
+		}
 		if (read_write == I2C_SMBUS_WRITE) {
 			msg.rlen = 1;
 			msg.wlen += 1;
@@ -306,6 +303,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb_data->byte = val;
 		break;
 	case I2C_SMBUS_WORD_DATA:
+		if (!smb_data) {
+			ret = -EINVAL;
+			break;
+		}
 		if (read_write == I2C_SMBUS_WRITE) {
 			msg.rlen = 1;
 			msg.wlen += 2;
@@ -328,6 +329,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb_data->word = val;
 		break;
 	case I2C_SMBUS_BLOCK_DATA:
+		if (!smb_data) {
+			ret = -EINVAL;
+			break;
+		}
 		if (read_write == I2C_SMBUS_WRITE) {
 			msg.rlen = 1;
 			msg.wlen += buf[0];
@@ -351,6 +356,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 		}
 		break;
 	case I2C_SMBUS_I2C_BLOCK_DATA:
+		if (!smb_data) {
+			ret = -EINVAL;
+			break;
+		}
 		if (read_write == I2C_SMBUS_WRITE) {
 			msg.rlen = 1;
 			msg.wlen += buf[0];
@@ -429,11 +438,11 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	else
 		bus_frequency = 100;
 
-	ret = imanager_i2c_write_freq(&imgr->ec.io, I2C_OEM_1, bus_frequency);
+	ret = imanager_i2c_write_freq(&imgr->ec.io, I2COEM, bus_frequency);
 	if (ret < 0)
 		dev_warn(dev, "Could not set SMBus frequency\n");
 
-	ret = imanager_i2c_read_freq(&imgr->ec.io, I2C_OEM_1);
+	ret = imanager_i2c_read_freq(&imgr->ec.io, I2COEM);
 	if (ret < 0)
 		dev_warn(dev, "Could not read SMBus frequency (%d)\n", ret);
 	else
