@@ -1,7 +1,7 @@
 /*
  * Advantech iManager - firmware interface
  *
- * Copyright (C) 2016 Advantech Co., Ltd., Irvine, CA, USA
+ * Copyright (C) 2016 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -15,9 +15,10 @@
 
 #include <linux/types.h>
 
-/* Delay time - message polling */
-#define EC_DELAY_MIN			200UL /* micro seconds */
+/* Delay time - micro seconds */
+#define EC_DELAY_MIN			200UL
 #define EC_DELAY_MAX			250UL
+
 #define EC_MAX_RETRY			400UL
 
 #define CHIP_ID_IT8518			0x8518
@@ -83,14 +84,14 @@
 #define EC_CMD_WDT_CTRL			0x28UL
 
 /*
- * ACPI and HW RAM offsets
+ * ACPI RAM offsets
  */
-#define EC_ACPIRAM_FAN_ALERT		0x6FUL
-#define EC_ACPIRAM_FAN_SPEED_LIMIT	0x76UL
-#define EC_ACPIRAM_BRIGHTNESS1		0x50UL
-#define EC_ACPIRAM_BRIGHTNESS2		0x52UL
-#define EC_ACPIRAM_BLC_CTRL		0x99UL
-#define EC_ACPIRAM_FW_RELEASE		0xF8UL
+#define EC_OFFSET_FAN_ALERT		0x6FUL
+#define EC_OFFSET_FAN_ALERT_LIMIT	0x76UL
+#define EC_OFFSET_BRIGHTNESS1		0x50UL
+#define EC_OFFSET_BRIGHTNESS2		0x52UL
+#define EC_OFFSET_BACKLIGHT_CTRL	0x99UL
+#define EC_OFFSET_FW_RELEASE		0xF8UL
 
 /*
  * iManager flags and offsets
@@ -102,8 +103,9 @@
 #define IMANAGER_FEATURE_SMBUS		BIT(4)
 #define IMANAGER_FEATURE_WDT		BIT(5)
 
-#define EC_FLAG_OUTBUF			BIT(0)
-#define EC_FLAG_INBUF			BIT(1)
+#define EC_IO28_OUTBUF			BIT(0)
+#define EC_IO28_INBUF			BIT(1)
+
 #define EC_FLAG_HWMON_MSG		BIT(9)
 
 #define EC_MSG_OFFSET_CMD		0UL
@@ -128,15 +130,7 @@
 
 enum kinds { IT8518, IT8528 };
 
-enum ec_device_type {
-	ADC = 1,
-	DAC,
-	GPIO,
-	IRQ,
-	PWM,
-	SMB,
-	TACH
-};
+enum ec_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
 
 enum ec_device_id {
 	/* GPIO */
@@ -148,17 +142,8 @@ enum ec_device_id {
 	ALTGPIO5,
 	ALTGPIO6,
 	ALTGPIO7,
-	/* Button (GPIO) */
-	BUTTON0,
-	BUTTON1,
-	BUTTON2,
-	BUTTON3,
-	BUTTON4,
-	BUTTON5,
-	BUTTON6,
-	BUTTON7,
 	/* FAN */
-	CPUFAN_2P,
+	CPUFAN_2P	= 0x20,
 	CPUFAN_4P,
 	SYSFAN1_2P,
 	SYSFAN1_4P,
@@ -166,10 +151,8 @@ enum ec_device_id {
 	SYSFAN2_4P,
 	/* Brightness Control */
 	BRIGHTNESS,
-	/* System Speaker */
-	PCBEEP,
 	/* SMBus */
-	SMBOEM0,
+	SMBOEM0		= 0x28,
 	SMBOEM1,
 	SMBOEM2,
 	SMBEEPROM,
@@ -194,9 +177,6 @@ enum ec_device_id {
 	OEMLED1,
 	OEMLED2,
 	BATLEDR,
-	/* Smart Battery */
-	SMARTBAT1	= 0x48,
-	SMARTBAT2,
 	/* ADC */
 	CMOSBAT		= 0x50,
 	CMOSBAT_2,
@@ -248,12 +228,6 @@ enum ec_device_id {
 	BACKLIGHT2
 };
 
-enum ec_device_table_type {
-	EC_DT_DID,
-	EC_DT_HWP,
-	EC_DT_POL
-};
-
 struct ec_device_table {
 	int id;
 	int type;
@@ -278,14 +252,6 @@ static const struct ec_device_table devtbl[] = {
 	{ ALTGPIO5,	GPIO,	-1,	"gpio5" },
 	{ ALTGPIO6,	GPIO,	-1,	"gpio6" },
 	{ ALTGPIO7,	GPIO,	-1,	"gpio7" },
-	{ BUTTON0,	GPIO,	-1,	"button0" },
-	{ BUTTON1,	GPIO,	-1,	"button1" },
-	{ BUTTON2,	GPIO,	-1,	"button2" },
-	{ BUTTON3,	GPIO,	-1,	"button3" },
-	{ BUTTON4,	GPIO,	-1,	"button4" },
-	{ BUTTON5,	GPIO,	-1,	"button5" },
-	{ BUTTON6,	GPIO,	-1,	"button6" },
-	{ BUTTON7,	GPIO,	-1,	"button7" },
 	{ CPUFAN_2P,	PWM,	2,	"FAN CPU" },
 	{ CPUFAN_4P,	PWM,	4,	"FAN CPU" },
 	{ SYSFAN1_2P,	PWM,	2,	"FAN SYS1" },
@@ -293,7 +259,6 @@ static const struct ec_device_table devtbl[] = {
 	{ SYSFAN2_2P,	PWM,	2,	"FAN SYS2" },
 	{ SYSFAN2_4P,	PWM,	4,	"FAN SYS2" },
 	{ BRIGHTNESS,	PWM,	-1,	"Brightness1" },
-	{ PCBEEP,	PWM,	-1,	"Beep" },
 	{ SMBOEM0,	SMB,	-1,	"SMB1" },
 	{ SMBOEM1,	SMB,	-1,	"SMB2" },
 	{ SMBOEM2,	SMB,	-1,	"SMB3" },
@@ -316,8 +281,6 @@ static const struct ec_device_table devtbl[] = {
 	{ OEMLED1,	GPIO,	-1,	"OEMLED1" },
 	{ OEMLED2,	GPIO,	-1,	"OEMLED2" },
 	{ BATLEDR,	GPIO,	-1,	"OEMLEDR" },
-	{ SMARTBAT1,	SMB,	-1,	"SmartBat1" },
-	{ SMARTBAT2,	SMB,	-1,	"SmartBat2" },
 	{ CMOSBAT,	ADC,	1,	"VBat" },
 	{ CMOSBAT_2,	ADC,	2,	"VBat" },
 	{ CMOSBAT_10,	ADC,	10,	"VBat" },
