@@ -30,6 +30,8 @@
 #include "imanager.h"
 #include "imanager-ec.h"
 
+enum kinds { IT8518, IT8528 };
+
 static struct platform_device *imanager_pdev;
 
 static const char * const chip_names[] = {
@@ -153,7 +155,7 @@ static int imanager_check_ec_ready(struct imanager_io_ops *io)
 	return -ETIME;
 }
 
-enum ec_device_table_type { DEVID, HWPIN, POLARITY };
+enum ec_device_table_type { DEVID = 0, HWPIN, POLARITY };
 
 static int imanager_read_device_config(struct imanager_ec_data *ec)
 {
@@ -188,85 +190,17 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 	}
 
 	/* Build device table */
-	for (i = 0; (i < EC_MAX_DID) && msgs[0].u.data[i]; i++) {
+	for (i = 0; (i < EC_MAX_DID) && msgs[DEVID].u.data[i]; i++) {
 		cfg = &ec->cfg[i];
 		for (j = 0; j < ARRAY_SIZE(devtbl); j++) {
-			if (devtbl[j].id == msgs[0].u.data[i]) {
-				cfg->did = msgs[0].u.data[i];
-				cfg->hwp = msgs[1].u.data[i];
-				cfg->pol = msgs[2].u.data[i];
+			if (devtbl[j].id == msgs[DEVID].u.data[i]) {
+				cfg->did = msgs[DEVID].u.data[i];
+				cfg->hwp = msgs[HWPIN].u.data[i];
+				cfg->pol = msgs[POLARITY].u.data[i];
 				cfg->devtbl = &devtbl[j];
 				break;
 			}
 		}
-	}
-
-	return 0;
-}
-
-static inline void data_to_ec(struct imanager_io_ops *io, u8 *data, u8 len)
-{
-	int i, j;
-
-	for (i = 0, j = EC_MSG_OFFSET_DATA(0); i < len; i++, j++)
-		io->write(j, data[i]);
-}
-
-static inline void
-data_from_ec(struct imanager_io_ops *io, u8 *data, u8 len, int offset)
-{
-	int i;
-
-	for (i = 0; i < len; i++, offset++)
-		data[i] = io->read(offset);
-}
-
-static int imanager_msg_xfer(struct imanager_io_ops *io, u8 cmd,
-			     struct ec_message *msg, bool payload)
-{
-	int ret;
-	int offset = EC_MSG_OFFSET_DATA(0);
-
-	ret = imanager_check_ec_ready(io);
-	if (ret)
-		return ret;
-
-	io->write(EC_MSG_OFFSET_PARAM, msg->param);
-
-	if (msg->wlen) {
-		if (msg->data) {
-			data_to_ec(io, msg->data, msg->wlen);
-			io->write(EC_MSG_OFFSET_DATA(0x2c), msg->wlen);
-		} else {
-			data_to_ec(io, msg->u.data, msg->wlen);
-		}
-	}
-
-	io->write(EC_MSG_OFFSET_CMD, cmd);
-	ret = imanager_check_ec_ready(io);
-	if (ret)
-		return ret;
-
-	/* GPIO and I2C have different success return values */
-	ret = io->read(EC_MSG_OFFSET_STATUS);
-	if ((ret != EC_STATUS_SUCCESS) && !(ret & EC_STATUS_CMD_COMPLETE))
-		return -EIO;
-	/*
-	 * EC I2C may return an error code which we need to handoff
-	 * to the caller
-	 */
-	else if (ret & 0x007e)
-		return ret;
-
-	if (msg->rlen) {
-		if (msg->rlen == EC_FLAG_HWMON_MSG)
-			msg->rlen = io->read(EC_MSG_OFFSET_DATA(0x2C));
-		if (payload) /* i2c, hwmon, wdt */
-			offset = EC_MSG_OFFSET_PAYLOAD(0);
-		if (msg->data)
-			data_from_ec(io, msg->data, msg->rlen, offset);
-		else
-			data_from_ec(io, msg->u.data, msg->rlen, offset);
 	}
 
 	return 0;
@@ -587,6 +521,75 @@ static int imanager_ec_init(struct imanager_ec_data *ec)
 	return 0;
 }
 
+static inline void data_to_ec(struct imanager_io_ops *io, u8 *data, u8 len,
+			      int offset)
+{
+	int i;
+
+	for (i = 0; i < len; i++)
+		io->write(offset++, data[i]);
+}
+
+static inline void data_from_ec(struct imanager_io_ops *io, u8 *data, u8 len,
+				int offset)
+{
+	int i;
+
+	for (i = 0; i < len; i++)
+		data[i] = io->read(offset++);
+}
+
+static int imanager_msg_xfer(struct imanager_io_ops *io, u8 cmd,
+			     struct ec_message *msg, bool payload)
+{
+	int ret;
+	int offset = EC_MSG_OFFSET_DATA;
+
+	ret = imanager_check_ec_ready(io);
+	if (ret)
+		return ret;
+
+	io->write(EC_MSG_OFFSET_PARAM, msg->param);
+
+	if (msg->wlen) {
+		if (msg->data) {
+			data_to_ec(io, msg->data, msg->wlen, offset);
+			io->write(EC_MSG_OFFSET_LEN, msg->wlen);
+		} else {
+			data_to_ec(io, msg->u.data, msg->wlen, offset);
+		}
+	}
+
+	io->write(EC_MSG_OFFSET_CMD, cmd);
+	ret = imanager_check_ec_ready(io);
+	if (ret)
+		return ret;
+
+	/* GPIO and I2C have different success return values */
+	ret = io->read(EC_MSG_OFFSET_STATUS);
+	if ((ret != EC_STATUS_SUCCESS) && !(ret & EC_STATUS_CMD_COMPLETE))
+		return -EIO;
+	/*
+	 * EC I2C may return an error code which we need to handoff
+	 * to the caller
+	 */
+	else if (ret & 0x007e)
+		return ret;
+
+	if (msg->rlen) {
+		if (msg->rlen == EC_FLAG_HWMON_MSG)
+			msg->rlen = io->read(EC_MSG_OFFSET_LEN);
+		if (payload) /* i2c, hwmon, wdt */
+			offset = EC_MSG_OFFSET_PAYLOAD;
+		if (msg->data)
+			data_from_ec(io, msg->data, msg->rlen, offset);
+		else
+			data_from_ec(io, msg->u.data, msg->rlen, offset);
+	}
+
+	return 0;
+}
+
 /**
  * imanager_read_ram - read 'size' amount of data @ 'offset' of 'ram_type'
  * @io:		imanager_io_ops structure providing I/O operations
@@ -598,7 +601,7 @@ static int imanager_ec_init(struct imanager_ec_data *ec)
 int imanager_read_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
 		      u8 *data, u8 len)
 {
-	int i, j, ret;
+	int ret;
 
 	if (!data)
 		return -EINVAL;
@@ -608,8 +611,8 @@ int imanager_read_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
 		return ret;
 
 	io->write(EC_MSG_OFFSET_PARAM, ram_type);
-	io->write(EC_MSG_OFFSET_DATA(0), offset);
-	io->write(EC_MSG_OFFSET_DATA(0x2C), len);
+	io->write(EC_MSG_OFFSET_DATA, offset);
+	io->write(EC_MSG_OFFSET_LEN, len);
 	io->write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
 
 	ret = imanager_check_ec_ready(io);
@@ -620,8 +623,7 @@ int imanager_read_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
 	if (ret != EC_STATUS_SUCCESS)
 		return -EIO;
 
-	for (i = 0, j = EC_MSG_OFFSET_DATA(1); i < len; i++, j++)
-		data[i] = io->read(j);
+	data_from_ec(io, data, len, EC_MSG_OFFSET_RAM_DATA);
 
 	return 0;
 }
@@ -638,7 +640,7 @@ EXPORT_SYMBOL_GPL(imanager_read_ram);
 int imanager_write_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
 		       u8 *data, u8 len)
 {
-	int i, j, ret;
+	int ret;
 
 	if (!data)
 		return -EINVAL;
@@ -648,11 +650,10 @@ int imanager_write_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
 		return ret;
 
 	io->write(EC_MSG_OFFSET_PARAM, ram_type);
-	io->write(EC_MSG_OFFSET_DATA(0), offset);
-	io->write(EC_MSG_OFFSET_DATA(0x2C), len);
+	io->write(EC_MSG_OFFSET_DATA, offset);
+	io->write(EC_MSG_OFFSET_LEN, len);
 
-	for (i = 0, j = EC_MSG_OFFSET_DATA(1); i < len; i++, j++)
-		io->write(j, data[i]);
+	data_to_ec(io, data, len, EC_MSG_OFFSET_RAM_DATA);
 
 	io->write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
 
@@ -776,7 +777,7 @@ int imanager_write16(struct imanager_io_ops *io, u8 cmd, u8 param, u16 word)
 		.wlen = 2,
 		.param = param,
 		.u = {
-			.data = { HIBYTE16(word), LOBYTE16(word), 0 },
+			.data = { (word >> 8), (word & 0xff), 0 },
 		},
 	};
 

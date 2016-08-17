@@ -50,11 +50,6 @@
 #define EC_MAX_DID			32UL
 #define EC_MAX_LABEL_SIZE		16UL
 
-#define LOBYTE16(x)			(x & 0x00FF)
-#define HIBYTE16(x)			(LOBYTE16(x >> 8))
-#define LOADDR16(x)			LOBYTE16(x)
-#define HIADDR16(x)			(x >= 0xF000 ? HIBYTE16(x) : 0)
-
 /*
  * iManager commands
  */
@@ -111,8 +106,11 @@
 #define EC_MSG_OFFSET_CMD		0UL
 #define EC_MSG_OFFSET_STATUS		1UL
 #define EC_MSG_OFFSET_PARAM		2UL
-#define EC_MSG_OFFSET_DATA(N)		(3UL + N)
-#define EC_MSG_OFFSET_PAYLOAD(N)	(7UL + N)
+#define EC_MSG_OFFSET_DATA_(N)		(3UL + N)
+#define EC_MSG_OFFSET_DATA		EC_MSG_OFFSET_DATA_(0)
+#define EC_MSG_OFFSET_RAM_DATA		EC_MSG_OFFSET_DATA_(1)
+#define EC_MSG_OFFSET_PAYLOAD		EC_MSG_OFFSET_DATA_(4)
+#define EC_MSG_OFFSET_LEN		EC_MSG_OFFSET_DATA_(0x2C)
 
 /* IT8528 based firmware require a read/write command offset. */
 #define EC_CMD_OFFSET_READ		0xA0UL
@@ -121,14 +119,12 @@
 #define EC_STATUS_SUCCESS		BIT(0)
 #define EC_STATUS_CMD_COMPLETE		BIT(7)
 
-#define EC_KERNEL_MINOR(x)		(LOBYTE16(x))
-#define EC_KERNEL_MAJOR(x)		({ typeof(x) __x = (HIBYTE16(x)); \
-					((__x >> 4) * 10 + (__x & 0x000f)); })
-#define EC_FIRMWARE_MINOR(x)		(LOBYTE16(x))
+#define EC_KERNEL_MINOR(x)		(x & 0xff)
+#define EC_KERNEL_MAJOR(x)		({ typeof(x) __x = (x >> 8); \
+					((__x >> 4) * 10 + (__x & 0x0f)); })
+#define EC_FIRMWARE_MINOR(x)		EC_KERNEL_MINOR(x)
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
-#define EC_PROJECT_CODE(x)		((char)(LOBYTE16(x)))
-
-enum kinds { IT8518, IT8528 };
+#define EC_PROJECT_CODE(x)		((char)(x & 0xff))
 
 enum ec_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
 
