@@ -38,6 +38,9 @@
 
 #define EC_I2C_XFER_COMPLETE	0UL
 
+#define U16_LO(x)		((x) & 0xff)
+#define U16_HI(x)		U16_LO((x) >> 8)
+
 static uint bus_frequency = 100;
 module_param(bus_frequency, uint, 0);
 MODULE_PARM_DESC(bus_frequency,
@@ -137,8 +140,8 @@ static int imanager_i2c_read_freq(struct imanager_io_ops *io, uint bus_id)
 	if (ret < 0)
 		return ret;
 
-	freq_id = HIBYTE16(ret);
-	f = LOBYTE16(ret);
+	freq_id = U16_HI(ret);
+	f = U16_LO(ret);
 	switch (freq_id) {
 	case 0:
 		freq = f;
@@ -228,15 +231,16 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 	struct imanager_io_ops *io = &imgr->ec.io;
 	struct device *dev = data->dev;
 	int val, len, ret = 0;
+	u16 addr16 = addr << 1; /* convert to 8-bit i2c slave address */
 	u8 *buf = smb_data->block;
 	struct ec_message msg = {
-		.param = imgr->ec.i2c.i2coem->did,
+		.param = imgr->ec.i2c.eeprom->did,
 		.rlen = 0,
 		.wlen = EC_MSG_HDR_SIZE,
 		.u = {
 			.smb.hdr = {
-				.addr_low  = LOADDR16(addr <<= 1),
-				.addr_high = HIADDR16(addr),
+				.addr_low  = U16_LO(addr16),
+				.addr_high = U16_HI(addr16),
 				.rlen = 0,
 				.wlen = 0,
 			},
@@ -313,8 +317,8 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.rlen = 0;
 			smb->hdr.wlen = 3;
 			smb->hdr.cmd = command;
-			smb->data[0] = LOBYTE16(smb_data->word);
-			smb->data[1] = HIBYTE16(smb_data->word);
+			smb->data[0] = U16_LO(smb_data->word);
+			smb->data[1] = U16_HI(smb_data->word);
 			val = imanager_i2c_wr_combined(io, &msg);
 		} else {
 			msg.rlen = 2;
