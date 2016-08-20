@@ -272,29 +272,34 @@ static void imanager_get_hwmon_adc(struct imanager_ec_data *ec)
 			case ADC12VS0:
 			case ADC12VS0_2:
 			case ADC12VS0_10:
-				ec_get_dev_attr(&adc->attr[adc->num++], cfg);
+				ec_get_dev_attr(&adc->attr[0], cfg);
+				adc->num++;
 				break;
 			case ADC5VS5:
 			case ADC5VS5_2:
 			case ADC5VS5_10:
-				ec_get_dev_attr(&adc->attr[adc->num++], cfg);
+				ec_get_dev_attr(&adc->attr[1], cfg);
+				adc->num++;
 				break;
 			case CMOSBAT:
 			case CMOSBAT_2:
 			case CMOSBAT_10:
-				ec_get_dev_attr(&adc->attr[adc->num++], cfg);
+				ec_get_dev_attr(&adc->attr[2], cfg);
+				adc->num++;
 				break;
 			case VCOREA:
 			case ADC5VS0:
 			case ADC5VS0_2:
 			case ADC5VS0_10:
-				ec_get_dev_attr(&adc->attr[adc->num++], cfg);
+				ec_get_dev_attr(&adc->attr[3], cfg);
+				adc->num++;
 				break;
 			case CURRENT:
 			case ADC33VS0:
 			case ADC33VS0_2:
 			case ADC33VS0_10:
-				ec_get_dev_attr(&adc->attr[adc->num++], cfg);
+				ec_get_dev_attr(&adc->attr[4], cfg);
+				adc->num++;
 				break;
 			default:
 				break;
@@ -427,26 +432,26 @@ static void imanager_get_wdt(struct imanager_ec_data *ec)
 		ec->features |= IMANAGER_FEATURE_WDT;
 }
 
-const char *project_type_to_str(int type)
+const char *project_code_to_str(char code)
 {
-	const char *version_type;
+	const char *str;
 
-	switch (type) {
+	switch (code) {
 	case 'V':
-		version_type = "release";
+		str = "release";
 		break;
 	case 'X':
-		version_type = "debug";
+		str = "debug";
 		break;
 	case 'A' ... 'U':
-		version_type = "custom";
+		str = "custom";
 		break;
 	default:
-		version_type = "unknown";
+		str = "unknown";
 		break;
 	}
 
-	return version_type;
+	return str;
 }
 
 static int imanager_read_firmware_version(struct imanager_ec_data *ec)
@@ -477,7 +482,7 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 	info->firmware_minor = EC_FIRMWARE_MINOR(val);
 
 	val = cpu_to_be16(ver.project_code);
-	info->type = project_type_to_str(EC_PROJECT_CODE(val));
+	info->type = project_code_to_str(EC_PROJECT_CODE(val));
 
 	/*
 	 * In some FW releases, the PCB name string is not Null-terminated so
