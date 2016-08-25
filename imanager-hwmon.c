@@ -355,9 +355,7 @@ store_in_min(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&data->imgr->lock);
 	data->adc[nr].min = in_to_reg(val);
-	mutex_unlock(&data->imgr->lock);
 
 	return count;
 }
@@ -375,9 +373,7 @@ store_in_max(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&data->imgr->lock);
 	data->adc[nr].max = in_to_reg(val);
-	mutex_unlock(&data->imgr->lock);
 
 	return count;
 }
@@ -451,7 +447,6 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index;
-	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_hwmon_adc *adc = &data->adc[nr];
 	unsigned long reset;
 	int err;
@@ -460,14 +455,10 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 	if (err < 0)
 		return err;
 
-	mutex_lock(&imgr->lock);
-
 	if (reset) {
 		adc->lowest = 0;
 		adc->highest = 0;
 	}
-
-	mutex_unlock(&imgr->lock);
 
 	return count;
 }
@@ -507,8 +498,10 @@ show_fan_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
+	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
+	bool is_alarm = (ctrl->mode == MODE_AUTO) ? 0 : check_fan_alarm(fan);
 
-	return sprintf(buf, "%u\n", check_fan_alarm(fan));
+	return sprintf(buf, "%u\n", is_alarm);
 }
 
 static ssize_t
@@ -553,10 +546,8 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 		return count;
 
 	mutex_lock(&imgr->lock);
-
 	fan->cfg.rpm_min = cpu_to_be16(val);
 	imanager_hwmon_write_fan_config(io, nr, fan);
-
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -584,10 +575,8 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 		return count;
 
 	mutex_lock(&imgr->lock);
-
 	fan->cfg.rpm_max = cpu_to_be16(val);
 	imanager_hwmon_write_fan_config(io, nr, fan);
-
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -736,12 +725,12 @@ show_pwm_mode(struct device *dev, struct device_attribute *attr, char *buf)
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
-	uint type = (ctrl->type == CTRL_PWM) ? 1 : 0;
+	uint mode = (ctrl->type == CTRL_PWM) ? 1 : 0;
 
 	if (ctrl->mode == MODE_OFF)
-		type = 0;
+		mode = 0;
 
-	return sprintf(buf, "%u\n", type);
+	return sprintf(buf, "%u\n", mode);
 }
 
 static ssize_t
@@ -764,11 +753,9 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 		return count;
 
 	mutex_lock(&imgr->lock);
-
 	ctrl->type = val ? CTRL_RPM : CTRL_PWM;
 	ctrl->enable = 1;
 	imanager_hwmon_write_fan_config(&imgr->ec.io, nr, fan);
-
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -792,15 +779,19 @@ show_temp_max(struct device *dev, struct device_attribute *attr, char *buf)
 	return sprintf(buf, "%u\n", data->fan[nr].cfg.temp_max * 1000);
 }
 
+#define CHKLIM(x, min, max) ((x < min) || (x > max))
+
 static ssize_t
 show_temp_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct fan_dev_config *cfg = &data->fan[nr].cfg;
+	struct fan_ctrl *ctrl = (struct fan_ctrl *)&cfg->control;
+	uint is_alarm = (ctrl->mode == MODE_AUTO) ? 0 :
+			CHKLIM(cfg->temp, cfg->temp_min, cfg->temp_max);
 
-	return sprintf(buf, "%u\n", ((cfg->temp < cfg->temp_min) ||
-		       (cfg->temp > cfg->temp_max)));
+	return sprintf(buf, "%u\n", is_alarm);
 }
 
 static ssize_t
