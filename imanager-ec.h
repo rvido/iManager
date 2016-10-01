@@ -15,7 +15,7 @@
 
 #include <linux/types.h>
 
-/* Delay time - micro seconds */
+/* Delay time for port polling in micro seconds */
 #define EC_DELAY_MIN			200UL
 #define EC_DELAY_MAX			250UL
 
@@ -44,8 +44,8 @@
 
 #define PCB_NAME_SIZE			8UL
 #define EC_PAYLOAD_SIZE			40UL
-#define EC_MSG_SIZE			sizeof(struct ec_smb_message)
-#define EC_MSG_HDR_SIZE			sizeof(struct ec_smb_message_header)
+#define EC_MSG_SIZE			sizeof(struct imanager_ec_smb_message)
+#define EC_MSG_HDR_SIZE			sizeof(struct imanager_ec_smb_msg_hdr)
 
 #define EC_MAX_DID			32UL
 #define EC_MAX_LABEL_SIZE		16UL
@@ -88,9 +88,7 @@
 #define EC_OFFSET_BACKLIGHT_CTRL	0x99UL
 #define EC_OFFSET_FW_RELEASE		0xF8UL
 
-/*
- * iManager flags and offsets
- */
+/* iManager flags */
 #define IMANAGER_FEATURE_BACKLIGHT	BIT(0)
 #define IMANAGER_FEATURE_GPIO		BIT(1)
 #define IMANAGER_FEATURE_HWMON_ADC	BIT(2)
@@ -101,23 +99,23 @@
 #define EC_IO28_OUTBUF			BIT(0)
 #define EC_IO28_INBUF			BIT(1)
 
-#define EC_FLAG_HWMON_MSG		BIT(9)
+#define EC_F_SUCCESS			BIT(0)
+#define EC_F_CMD_COMPLETE		BIT(7)
+#define EC_F_HWMON_MSG			BIT(9)
 
-#define EC_MSG_OFFSET_CMD		0UL
-#define EC_MSG_OFFSET_STATUS		1UL
-#define EC_MSG_OFFSET_PARAM		2UL
-#define EC_MSG_OFFSET_DATA_(N)		(3UL + N)
-#define EC_MSG_OFFSET_DATA		EC_MSG_OFFSET_DATA_(0)
-#define EC_MSG_OFFSET_RAM_DATA		EC_MSG_OFFSET_DATA_(1)
-#define EC_MSG_OFFSET_PAYLOAD		EC_MSG_OFFSET_DATA_(4)
-#define EC_MSG_OFFSET_LEN		EC_MSG_OFFSET_DATA_(0x2C)
+/* iManager offsets */
+#define EC_MSG_OFFSET(N)		(0UL + N)
+#define EC_MSG_OFFSET_CMD		EC_MSG_OFFSET(0)
+#define EC_MSG_OFFSET_STATUS		EC_MSG_OFFSET(1)
+#define EC_MSG_OFFSET_PARAM		EC_MSG_OFFSET(2)
+#define EC_MSG_OFFSET_DATA		EC_MSG_OFFSET(3)
+#define EC_MSG_OFFSET_RAM_DATA		EC_MSG_OFFSET(4)
+#define EC_MSG_OFFSET_PAYLOAD		EC_MSG_OFFSET(7)
+#define EC_MSG_OFFSET_LEN		EC_MSG_OFFSET(0x2F)
 
 /* IT8528 based firmware require a read/write command offset. */
 #define EC_CMD_OFFSET_READ		0xA0UL
 #define EC_CMD_OFFSET_WRITE		0x50UL
-
-#define EC_STATUS_SUCCESS		BIT(0)
-#define EC_STATUS_CMD_COMPLETE		BIT(7)
 
 #define EC_KERNEL_MINOR(x)		(x & 0xff)
 #define EC_KERNEL_MAJOR(x)		({ typeof(x) __x = (x >> 8); \
@@ -126,286 +124,113 @@
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(x & 0xff))
 
-enum ec_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
+enum imanager_smbus_channel { SMBEEP = 0, IICOEM, SMB1, SMBPECI };
 
-enum ec_device_id {
+enum imanager_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
+
+enum imanager_device_id {
 	/* GPIO */
-	ALTGPIO0	= 0x10,
-	ALTGPIO1,
-	ALTGPIO2,
-	ALTGPIO3,
-	ALTGPIO4,
-	ALTGPIO5,
-	ALTGPIO6,
-	ALTGPIO7,
+	ALTGPIO0 = 0x10, ALTGPIO1, ALTGPIO2, ALTGPIO3, ALTGPIO4, ALTGPIO5,
+	ALTGPIO6, ALTGPIO7,
 	/* FAN */
-	CPUFAN_2P	= 0x20,
-	CPUFAN_4P,
-	SYSFAN1_2P,
-	SYSFAN1_4P,
-	SYSFAN2_2P,
-	SYSFAN2_4P,
+	CPUFAN_2P = 0x20, CPUFAN_4P,
+	SYSFAN1_2P, SYSFAN1_4P, SYSFAN2_2P, SYSFAN2_4P,
 	/* Brightness Control */
-	BRIGHTNESS,
+	BRIGHTNESS = 0x26,
 	/* SMBus */
-	SMBOEM0		= 0x28,
-	SMBOEM1,
-	SMBOEM2,
-	SMBEEPROM,
-	SMBTHERMAL0,
-	SMBTHERMAL1,
-	SMBSECEEP,
-	I2COEM,
+	SMBOEM0	 = 0x28, SMBOEM1, SMBOEM2, SMBEEPROM,
+	SMBTHERMAL0 = 0x2C, SMBTHERMAL1, SMBSECEEP, I2COEM,
 	/* Speaker */
-	SPEAKER		= 0x30,
+	SPEAKER  = 0x30,
 	/* SMBus */
-	SMBEEP2K	= 0x38,
-	OEMEEP,
-	OEMEEP2K,
-	PECI,
-	SMBOEM3,
-	SMLINK,
-	SMBSLV,
+	SMBEEP2K = 0x38, OEMEEP, OEMEEP2K, PECI, SMBOEM3, SMLINK, SMBSLV,
 	/* LED */
-	POWERLED	= 0x40,
-	BATLEDG,
-	OEMLED0,
-	OEMLED1,
-	OEMLED2,
-	BATLEDR,
+	POWERLED = 0x40, BATLEDG, OEMLED0, OEMLED1, OEMLED2, BATLEDR,
 	/* ADC */
-	CMOSBAT		= 0x50,
-	CMOSBAT_2,
-	CMOSBAT_10,
-	LIBAT,
-	LIBAT_2,
-	LIBAT_10,
-	ADC5VS0,
-	ADC5VS0_2,
-	ADC5VS0_10,
-	ADC5VS5,
-	ADC5VS5_2,
-	ADC5VS5_10,
-	ADC33VS0,
-	ADC33VS0_2,
-	ADC33VS0_10,
-	ADC33VS5,
-	ADC33VS5_2,	/* 0x60 */
-	ADC33VS5_10,
-	ADC12VS0,
-	ADC12VS0_2,
-	ADC12VS0_10,
-	VCOREA,
-	VCOREA_2,
-	VCOREA_10,
-	VCOREB,
-	VCOREB_2,
-	VCOREB_10,
-	ADCDC,
-	ADCDC_2,
-	ADCDC_10,
-	VSTBY,
-	VSTBY_2,
-	VSTBY_10,	/* 0x70 */
-	VAUX,
-	VAUX_2,
-	VAUX_10,
-	CURRENT,
+	CMOSBAT  = 0x50, CMOSBAT_2, CMOSBAT_10, LIBAT, LIBAT_2, LIBAT_10,
+	ADC5VS0  = 0x56, ADC5VS0_2, ADC5VS0_10,
+	ADC5VS5  = 0x59, ADC5VS5_2, ADC5VS5_10,
+	ADC33VS0 = 0x5C, ADC33VS0_2, ADC33VS0_10,
+	ADC33VS5 = 0x5F, ADC33VS5_2, ADC33VS5_10,
+	ADC12VS0 = 0x62, ADC12VS0_2, ADC12VS0_10,
+	VCOREA   = 0x65, VCOREA_2, VCOREA_10,
+	VCOREB   = 0x68, VCOREB_2, VCOREB_10,
+	ADCDC    = 0x6B, ADCDC_2, ADCDC_10,
+	VSTBY    = 0x6E, VSTBY_2, VSTBY_10,
+	VAUX     = 0x71, VAUX_2, VAUX_10,
+	CURRENT  = 0x74,
 	/* Watchdog */
-	WDIRQ		= 0x78,
-	WDNMI,
+	WDIRQ    = 0x78, WDNMI,
 	/* FAN Tacho */
-	TACHO0		= 0x80,
-	TACHO1,
-	TACHO2,
+	TACHO0   = 0x80, TACHO1, TACHO2,
 	/* Brightness/Backlight Control */
-	BRIGHTNESS2	= 0x88,
-	BACKLIGHT1,
-	BACKLIGHT2
+	BRIGHTNESS2 = 0x88,
+	BACKLIGHT1, BACKLIGHT2
 };
 
-struct ec_device_table {
-	int id;
-	int type;
-	int scale;
-	char label[EC_MAX_LABEL_SIZE];
+#define IMANAGER_EC_DEVICE(device_id, device_type, scaling_factor) \
+	.did = (device_id), .type = (device_type), .scale = (scaling_factor)
+
+/**
+ * struct imanager_device_table_row - Describes iManager EC Device
+ * @did:	iManager Device ID
+ * @type:	iManager Device Type
+ * @scale:	Scaling factor
+ */
+struct imanager_device_table_entry {
+	unsigned int did;
+	unsigned int type;
+	unsigned int scale;
 };
 
-struct imanager_device_config {
-	unsigned int did;	/* Device ID */
-	unsigned int hwp;	/* Hardware Pin */
-	unsigned int pol;	/* Polarity */
-	const struct ec_device_table *devtbl; /* Device Table Entry */
+/**
+ * struct imanager_io_ops - iManager I/O operation structure
+ * @read:	iManager read call-back
+ * @write:	iManager write call-back
+ */
+struct imanager_io_ops {
+	int (*read)(int cmd);
+	int (*write)(int cmd, int value);
 };
 
-static const struct ec_device_table devtbl[] = {
-	/* ID		Type	Scale	Label */
-	{ ALTGPIO0,	GPIO,	-1,	"gpio0" },
-	{ ALTGPIO1,	GPIO,	-1,	"gpio1" },
-	{ ALTGPIO2,	GPIO,	-1,	"gpio2" },
-	{ ALTGPIO3,	GPIO,	-1,	"gpio3" },
-	{ ALTGPIO4,	GPIO,	-1,	"gpio4" },
-	{ ALTGPIO5,	GPIO,	-1,	"gpio5" },
-	{ ALTGPIO6,	GPIO,	-1,	"gpio6" },
-	{ ALTGPIO7,	GPIO,	-1,	"gpio7" },
-	{ CPUFAN_2P,	PWM,	2,	"FAN CPU" },
-	{ CPUFAN_4P,	PWM,	4,	"FAN CPU" },
-	{ SYSFAN1_2P,	PWM,	2,	"FAN SYS1" },
-	{ SYSFAN1_4P,	PWM,	4,	"FAN SYS1" },
-	{ SYSFAN2_2P,	PWM,	2,	"FAN SYS2" },
-	{ SYSFAN2_4P,	PWM,	4,	"FAN SYS2" },
-	{ BRIGHTNESS,	PWM,	-1,	"Brightness1" },
-	{ SMBOEM0,	SMB,	-1,	"SMB1" },
-	{ SMBOEM1,	SMB,	-1,	"SMB2" },
-	{ SMBOEM2,	SMB,	-1,	"SMB3" },
-	{ SMBEEPROM,	SMB,	-1,	"SMBEEP" },
-	{ SMBTHERMAL0,	SMB,	-1,	"SMBTHERM0" },
-	{ SMBTHERMAL1,	SMB,	-1,	"SMBTHERM1" },
-	{ SMBSECEEP,	SMB,	-1,	"SMBSECEEP" },
-	{ I2COEM,	SMB,	-1,	"I2COEM" },
-	{ SPEAKER,	DAC,	-1,	"Speaker" },
-	{ SMBEEP2K,	SMB,	-1,	"SMBEEP2K" },
-	{ OEMEEP,	SMB,	-1,	"OEMEEP" },
-	{ OEMEEP2K,	SMB,	-1,	"OEMEEP2K" },
-	{ PECI,		SMB,	-1,	"SMB_PECI" },
-	{ SMBOEM3,	SMB,	-1,	"SMBOEM3" },
-	{ SMLINK,	SMB,	-1,	"SMLINK" },
-	{ SMBSLV,	SMB,	-1,	"SMBSLV" },
-	{ POWERLED,	GPIO,	-1,	"Power LED" },
-	{ BATLEDG,	GPIO,	-1,	"BATLEDG" },
-	{ OEMLED0,	GPIO,	-1,	"OEMLED0" },
-	{ OEMLED1,	GPIO,	-1,	"OEMLED1" },
-	{ OEMLED2,	GPIO,	-1,	"OEMLED2" },
-	{ BATLEDR,	GPIO,	-1,	"OEMLEDR" },
-	{ CMOSBAT,	ADC,	1,	"VBat" },
-	{ CMOSBAT_2,	ADC,	2,	"VBat" },
-	{ CMOSBAT_10,	ADC,	10,	"VBat" },
-	{ LIBAT,	ADC,	1,	"VBat2" },
-	{ LIBAT_2,	ADC,	2,	"VBat2" },
-	{ LIBAT_10,	ADC,	10,	"VBat2" },
-	{ ADC5VS0,	ADC,	1,	"+5V" },
-	{ ADC5VS0_2,	ADC,	2,	"+5V" },
-	{ ADC5VS0_10,	ADC,	10,	"+5V" },
-	{ ADC5VS5,	ADC,	1,	"+5V" },
-	{ ADC5VS5_2,	ADC,	2,	"+5V" },
-	{ ADC5VS5_10,	ADC,	10,	"+5V" },
-	{ ADC33VS0,	ADC,	1,	"+3.3V" },
-	{ ADC33VS0_2,	ADC,	2,	"+3.3V" },
-	{ ADC33VS0_10,	ADC,	10,	"+3.3V" },
-	{ ADC33VS5,	ADC,	1,	"+3.3V" },
-	{ ADC33VS5_2,	ADC,	2,	"+3.3V" },
-	{ ADC33VS5_10,	ADC,	10,	"+3.3V" },
-	{ ADC12VS0,	ADC,	1,	"+12V" },
-	{ ADC12VS0_2,	ADC,	2,	"+12V" },
-	{ ADC12VS0_10,	ADC,	10,	"+12V" },
-	{ VCOREA,	ADC,	1,	"VCore" },
-	{ VCOREA_2,	ADC,	2,	"VCore" },
-	{ VCOREA_10,	ADC,	10,	"VCore" },
-	{ VCOREB,	ADC,	1,	"VCore2" },
-	{ VCOREB_2,	ADC,	2,	"VCore2" },
-	{ VCOREB_10,	ADC,	10,	"VCore2" },
-	{ ADCDC,	ADC,	1,	"ADCDC" },
-	{ ADCDC_2,	ADC,	2,	"ADCDCx2" },
-	{ ADCDC_10,	ADC,	10,	"ADCDCx10" },
-	{ VSTBY,	ADC,	1,	"Vsb" },
-	{ VSTBY_2,	ADC,	2,	"Vsb" },
-	{ VSTBY_10,	ADC,	10,	"Vsb" },
-	{ VAUX,		ADC,	1,	"VAUX" },
-	{ VAUX_2,	ADC,	2,	"VAUX" },
-	{ VAUX_10,	ADC,	10,	"VAUX" },
-	{ CURRENT,	ADC,	1,	"Imon" },
-	{ WDIRQ,	IRQ,	-1,	"WDIRQ" },
-	{ WDNMI,	GPIO,	-1,	"WDNMI" },
-	{ TACHO0,	TACH,	-1,	"Tacho1" },
-	{ TACHO1,	TACH,	-1,	"Tacho2" },
-	{ TACHO2,	TACH,	-1,	"Tacho3" },
-	{ BRIGHTNESS2,	PWM,	-1,	"Brightness2" },
-	{ BACKLIGHT1,	GPIO,	-1,	"Backlight1" },
-	{ BACKLIGHT2,	GPIO,	-1,	"Backlight2" },
-	{ 0, 0, 0, "" }
-};
-
-struct ec_smb_message_header {
-	u8 addr_low;	/* SMB low-byte address or data low-byte */
-			/* of byte-/word-transaction */
-	u8 addr_high;	/* SMB high-byte address or data high-byte */
-			/* of word-transaction */
-	u8 rlen;	/* SMB read length */
-	u8 wlen;	/* SMB write length */
-	u8 cmd;		/* SMB command */
+/**
+ * struct imanager_ec_smb_msg_hdr - Defines iManager EC SMBus message header
+ * @addr_low:	low-byte of word address (or data)
+ * @addr_high:	high-byte of word address (or data)
+ * @rlen:	SMB read length
+ * @wlen:	SMB write length
+ * @cmd:	SMB command
+ */
+struct imanager_ec_smb_msg_hdr {
+	unsigned char addr_low;
+	unsigned char addr_high;
+	unsigned char rlen;
+	unsigned char wlen;
+	unsigned char cmd;
 } __attribute__((__packed__));
 
-struct ec_smb_message {
-	struct ec_smb_message_header hdr;
-	u8 data[EC_PAYLOAD_SIZE];
+/**
+ * struct imanager_ec_smb_message - Defines iManager SMBus message
+ * @hdr:	iManager SMBus message header
+ * @data:	iManager SMBus message data field (payload)
+ */
+struct imanager_ec_smb_message {
+	struct imanager_ec_smb_msg_hdr hdr;
+	unsigned char data[EC_PAYLOAD_SIZE];
 } __attribute__((__packed__));
 
-struct ec_version_raw {
-	u16	kernel,
-		chipid,
-		project_code,
-		firmware;
+/**
+ * struct imanager_ec_version - Defines iManager EC firmware version structure
+ * @kernel:		iManager EC FW kernel release
+ * @chipid:		iManager EC chip ID
+ * @project_code:	iManager EC FW status
+ * @firmware:		iManager EC FW release
+ */
+struct imanager_ec_version {
+	unsigned short kernel;
+	unsigned short chipid;
+	unsigned short project_code;
+	unsigned short firmware;
 } __attribute__((__packed__));
-
-struct ec_message {
-	unsigned int rlen;	/* Read length */
-	unsigned int wlen;	/* Write length */
-	unsigned int param;	/* Parameter (offset, id, or unit number) */
-	union {
-		struct ec_smb_message smb;
-		u8 data[EC_MSG_SIZE];
-	} u;
-
-	u8 *data;
-};
-
-struct ec_dev_attr {
-	unsigned int did;	/* Device ID */
-	unsigned int hwp;	/* Hardware Pin number */
-	unsigned int pol;	/* Polarity */
-	unsigned int scale;	/* Scaling factor */
-	const char *label;
-};
-
-struct imanager_gpio_device {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_GPIO_NUM];
-};
-
-struct ec_dev_adc {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_ADC_NUM];
-};
-
-struct ec_dev_fan {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_FAN_NUM];
-	const char		*temp_label[EC_MAX_FAN_NUM];
-};
-
-struct imanager_hwmon_device {
-	struct ec_dev_adc	adc;
-	struct ec_dev_fan	fan;
-};
-
-struct imanager_i2c_device {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_SMB_NUM];
-	struct ec_dev_attr	*eeprom;
-	struct ec_dev_attr	*i2coem;
-};
-
-struct imanager_backlight_device {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_BLC_NUM];
-	u8			brightness[EC_MAX_BLC_NUM];
-};
-
-struct imanager_watchdog_device {
-	unsigned int		num;
-	struct ec_dev_attr	attr[EC_MAX_WDT_NUM];
-	struct ec_dev_attr	*irq;
-	struct ec_dev_attr	*nmi;
-};
 
 #endif

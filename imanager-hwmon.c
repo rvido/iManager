@@ -26,7 +26,6 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
-#define __NEED_HWMON_COMPAT__
 #include "compat.h"
 #include "imanager.h"
 
@@ -113,7 +112,7 @@ struct imanager_hwmon_smartfan {
 	int speed;
 	bool speed_min_alarm;
 	bool speed_max_alarm;
-	struct fan_dev_config	cfg;
+	struct fan_dev_config cfg;
 };
 
 struct imanager_hwmon_data {
@@ -129,39 +128,34 @@ struct imanager_hwmon_data {
 	struct imanager_hwmon_smartfan	fan[EC_MAX_FAN_NUM];
 };
 
-static int imanager_hwmon_read_fan_config(struct imanager_io_ops *io, int fnum,
+static int imanager_hwmon_read_fan_config(struct imanager_ec_data *ec, int num,
 					  struct imanager_hwmon_smartfan *fan)
 {
-	struct ec_message msg = {
-		.rlen = EC_FLAG_HWMON_MSG,
-		.wlen = 0,
-		.param = fnum,
-		.data = (u8 *)&fan->cfg,
+	struct imanager_ec_message msg = {
+		IMANAGER_MSG_SIMPLE(EC_F_HWMON_MSG, 0, num, (u8 *)&fan->cfg)
 	};
 	int ret;
 
-	ret = imanager_read(io, EC_CMD_FAN_CTL_RD, &msg);
+	ret = imanager_read(ec, EC_CMD_FAN_CTL_RD, &msg);
 	if (ret)
 		return ret;
 
 	return fan->cfg.did ? 0 : -ENODEV;
 }
 
-static int imanager_hwmon_write_fan_config(struct imanager_io_ops *io, int fnum,
-					   struct imanager_hwmon_smartfan *fan)
+static int
+imanager_hwmon_write_fan_config(struct imanager_ec_data *ec, int num,
+				struct imanager_hwmon_smartfan *fan)
 {
-	struct ec_message msg = {
-		.rlen = 0,
-		.wlen = sizeof(fan->cfg),
-		.param = fnum,
-		.data = (u8 *)&fan->cfg,
+	struct imanager_ec_message msg = {
+		IMANAGER_MSG_SIMPLE(0, sizeof(fan->cfg), num, (u8 *)&fan->cfg)
 	};
 	int err;
 
 	if (!fan->cfg.did)
 		return -ENODEV;
 
-	err = imanager_write(io, EC_CMD_FAN_CTL_WR, &msg);
+	err = imanager_write(ec, EC_CMD_FAN_CTL_WR, &msg);
 	if (err < 0)
 		return err;
 
@@ -183,13 +177,13 @@ static int imanager_hwmon_write_fan_config(struct imanager_io_ops *io, int fnum,
 #define FAN_ALERT_MIN_BIT(var, fnum) TEST_BIT(var, BIT(fnum << 1))
 #define FAN_ALERT_MAX_BIT(var, fnum) TEST_BIT(var, BIT((fnum << 1) + 1))
 
-static int imanager_hwmon_read_fan_alert(struct imanager_io_ops *io, int fnum,
+static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int fnum,
 					 struct imanager_hwmon_smartfan *fan)
 {
 	u8 alert_flags;
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT,
+	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT,
 				&alert_flags, sizeof(alert_flags));
 	if (ret < 0)
 		return ret;
@@ -200,14 +194,14 @@ static int imanager_hwmon_read_fan_alert(struct imanager_io_ops *io, int fnum,
 	return 0;
 }
 
-static int imanager_hwmon_write_fan_alert(struct imanager_io_ops *io, int fnum,
+static int imanager_hwmon_write_fan_alert(struct imanager_ec_data *ec, int fnum,
 					  struct imanager_hwmon_smartfan *fan)
 {
 	struct fan_alert_limit limits[EC_MAX_FAN_NUM];
 	struct fan_alert_limit *limit = &limits[fnum];
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT_LIMIT,
+	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT_LIMIT,
 				(u8 *)limits, sizeof(limits));
 	if (ret < 0)
 		return ret;
@@ -215,58 +209,57 @@ static int imanager_hwmon_write_fan_alert(struct imanager_io_ops *io, int fnum,
 	limit->min = fan->cfg.rpm_min;
 	limit->max = fan->cfg.rpm_max;
 
-	return imanager_write_ram(io, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT_LIMIT,
+	return imanager_write_ram(ec, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT_LIMIT,
 				  (u8 *)limits, sizeof(limits));
 }
 
-static int imanager_hwmon_read_adc(struct imanager_ec_data *ec, int fnum,
+static int imanager_hwmon_read_adc(struct imanager_ec_data *ec, int num,
 				   struct imanager_hwmon_adc *adc)
 {
-	struct ec_dev_attr *adc_attr = &ec->hwmon.adc.attr[fnum];
+	struct imanager_device_attribute *attr = ec->hwmon.adc.attr[num];
 	int ret;
 
 	adc->valid = false;
 
-	if (!adc_attr->did)
+	if (!attr->did)
 		return -ENODEV;
 
-	ret = imanager_read16(&ec->io, EC_CMD_HWP_RD, adc_attr->did);
+	ret = imanager_read16(ec, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
 		return ret;
 
-	adc->value = ret * adc_attr->scale;
+	adc->value = ret * attr->devtbl->scale;
 	adc->valid = true;
 
 	return 0;
 }
 
-static int imanager_hwmon_read_fan_ctrl(struct imanager_ec_data *ec, int fnum,
+static int imanager_hwmon_read_fan_ctrl(struct imanager_ec_data *ec, int num,
 					struct imanager_hwmon_smartfan *fan)
 {
-	struct imanager_io_ops *io = &ec->io;
-	struct imanager_hwmon_device *hwmon = &ec->hwmon;
-	int fan_did = hwmon->fan.attr[fnum].did;
+	struct imanager_device_attribute *attr = ec->hwmon.adc.attr[num];
+
 	int ret;
 
 	fan->valid = false;
 
-	ret = imanager_hwmon_read_fan_config(io, fnum, fan);
+	ret = imanager_hwmon_read_fan_config(ec, num, fan);
 	if (ret < 0)
 		return ret;
 
-	ret = imanager_read16(io, EC_CMD_HWP_RD, fan->cfg.tachoid);
+	ret = imanager_read16(ec, EC_CMD_HWP_RD, fan->cfg.tachoid);
 	if (ret < 0)
 		return ret;
 
 	fan->speed = ret;
 
-	ret = imanager_read8(io, EC_CMD_HWP_RD, fan_did);
+	ret = imanager_read8(ec, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
 		return ret;
 
 	fan->pwm = ret;
 
-	ret = imanager_hwmon_read_fan_alert(io, fnum, fan);
+	ret = imanager_hwmon_read_fan_alert(ec, num, fan);
 	if (ret)
 		return ret;
 
@@ -447,7 +440,6 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index;
-	struct imanager_hwmon_adc *adc = &data->adc[nr];
 	unsigned long reset;
 	int err;
 
@@ -456,8 +448,8 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 		return err;
 
 	if (reset) {
-		adc->lowest = 0;
-		adc->highest = 0;
+		data->adc[nr].lowest = 0;
+		data->adc[nr].highest = 0;
 	}
 
 	return count;
@@ -531,7 +523,6 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
 	unsigned long val = 0;
@@ -547,7 +538,7 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&imgr->lock);
 	fan->cfg.rpm_min = cpu_to_be16(val);
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -560,7 +551,6 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
 	unsigned long val = 0;
@@ -576,7 +566,7 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&imgr->lock);
 	fan->cfg.rpm_max = cpu_to_be16(val);
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -599,10 +589,9 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_ec_data *ec = &imgr->ec;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
-	int did = ec->hwmon.fan.attr[nr].did;
+	int did = imgr->ec.hwmon.fan.attr[nr]->did;
 	unsigned long pwm = 0;
 	int err;
 
@@ -618,16 +607,16 @@ store_pwm(struct device *dev, struct device_attribute *attr,
 		ctrl->type = CTRL_PWM;
 		ctrl->pulse = 0;
 		ctrl->enable = 1;
-		imanager_hwmon_write_fan_config(&ec->io, nr, fan);
-		imanager_write8(&ec->io, EC_CMD_HWP_WR, did, pwm);
+		imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
+		imanager_write8(&imgr->ec, EC_CMD_HWP_WR, did, pwm);
 	} else if ((ctrl->mode == MODE_AUTO) && (ctrl->type == CTRL_PWM)) {
 		ctrl->pulse = 0;
 		ctrl->enable = 1;
 		fan->cfg.rpm_min = 0;
 		fan->cfg.rpm_max = 0;
-		imanager_hwmon_write_fan_config(&ec->io, nr, fan);
-		imanager_write8(&ec->io, EC_CMD_HWP_WR, did, pwm);
-		imanager_hwmon_write_fan_alert(&ec->io, nr, fan);
+		imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
+		imanager_write8(&imgr->ec, EC_CMD_HWP_WR, did, pwm);
+		imanager_hwmon_write_fan_alert(&imgr->ec, nr, fan);
 	}
 
 	mutex_unlock(&imgr->lock);
@@ -676,11 +665,10 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_ec_data *ec = &imgr->ec;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
-	int did = ec->hwmon.fan.attr[nr].did;
+	int did = imgr->ec.hwmon.fan.attr[nr]->did;
 	unsigned long mode = 0;
 	int err;
 
@@ -695,21 +683,21 @@ store_pwm_enable(struct device *dev, struct device_attribute *attr,
 		ctrl->mode = MODE_FULL;
 		ctrl->type = CTRL_PWM;
 		ctrl->enable = 1;
-		imanager_hwmon_write_fan_config(&ec->io, nr, fan);
-		imanager_write8(&ec->io, EC_CMD_HWP_WR, did, 100);
+		imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
+		imanager_write8(&imgr->ec, EC_CMD_HWP_WR, did, 100);
 		break;
 	case MANUAL:
 		ctrl->mode = MODE_MANUAL;
 		ctrl->type = CTRL_PWM;
 		ctrl->enable = 1;
-		imanager_hwmon_write_fan_config(&ec->io, nr, fan);
-		imanager_write8(&ec->io, EC_CMD_HWP_WR, did, 0);
+		imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
+		imanager_write8(&imgr->ec, EC_CMD_HWP_WR, did, 0);
 		break;
 	case THERMAL_CRUISE:
 		ctrl->mode = MODE_AUTO;
 		ctrl->enable = 1;
-		imanager_hwmon_write_fan_config(&ec->io, nr, fan);
-		imanager_write8(&ec->io, EC_CMD_HWP_WR, did, 0);
+		imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
+		imanager_write8(&imgr->ec, EC_CMD_HWP_WR, did, 0);
 		break;
 	}
 
@@ -755,7 +743,7 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&imgr->lock);
 	ctrl->type = val ? CTRL_RPM : CTRL_PWM;
 	ctrl->enable = 1;
-	imanager_hwmon_write_fan_config(&imgr->ec.io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -800,7 +788,6 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
@@ -830,7 +817,7 @@ store_temp_min(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&imgr->lock);
 	fan->cfg.temp_stop = val;
 	fan->cfg.temp_min = val;
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -842,7 +829,6 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
@@ -862,7 +848,7 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&imgr->lock);
 	fan->cfg.temp_max = val;
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -874,7 +860,6 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	long val = 0;
@@ -888,7 +873,7 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&imgr->lock);
 	fan->cfg.pwm_min = val;
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -900,7 +885,6 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	long val = 0;
@@ -914,7 +898,7 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&imgr->lock);
 	fan->cfg.pwm_max = val;
-	imanager_hwmon_write_fan_config(io, nr, fan);
+	imanager_hwmon_write_fan_config(&imgr->ec, nr, fan);
 	mutex_unlock(&imgr->lock);
 
 	return count;
@@ -927,7 +911,7 @@ show_in_label(struct device *dev, struct device_attribute *attr, char *buf)
 	struct imanager_hwmon_device *hwmon = &data->imgr->ec.hwmon;
 	int nr = to_sensor_dev_attr(attr)->index;
 
-	return sprintf(buf, "%s\n", hwmon->adc.attr[nr].label);
+	return sprintf(buf, "%s\n", hwmon->adc.label[nr]);
 }
 
 static ssize_t
@@ -947,7 +931,7 @@ show_fan_label(struct device *dev, struct device_attribute *attr, char *buf)
 	struct imanager_hwmon_device *hwmon = &data->imgr->ec.hwmon;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 
-	return sprintf(buf, "%s\n", hwmon->fan.attr[nr].label);
+	return sprintf(buf, "%s\n", hwmon->fan.label[nr]);
 }
 
 /*
@@ -1225,16 +1209,16 @@ imanager_fan_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 {
 	struct device *dev = to_dev(kobj);
 	struct imanager_hwmon_data *data = dev_get_drvdata(dev);
-	struct imanager_hwmon_device *hwmon = &data->imgr->ec.hwmon;
+	struct imanager_fan_device *fan = &data->imgr->ec.hwmon.fan;
 
 	if ((index >= 0) && (index <= 14)) { /* fan */
-		if (!hwmon->fan.attr[index / 5].did)
+		if (!fan->attr[index / 5])
 			return 0;
 	} else if ((index >= 15) && (index <= 29)) { /* temp */
-		if (!hwmon->fan.attr[(index - 15) / 5].did)
+		if (!fan->attr[(index - 15) / 5])
 			return 0;
 	} else if ((index >= 30) && (index <= 34)) { /* pwm */
-		if (!hwmon->fan.attr[(index - 30) / 5].did)
+		if (!fan->attr[(index - 30) / 5])
 			return 0;
 	}
 

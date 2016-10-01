@@ -14,13 +14,11 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/bitops.h>
-#if defined(__RHEL6__)
-#include <asm/byteorder.h>
-#endif
 #include <linux/byteorder/generic.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/init.h>
+#include <linux/io.h>
 #include <linux/mfd/core.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -40,28 +38,68 @@ static const char * const chip_names[] = {
 	NULL
 };
 
-static const char * const fan_temp_labels[] = {
-	"Temp CPU",
-	"Temp SYS1",
-	"Temp SYS2",
-	NULL,
+static const struct imanager_device_table_entry devtbl[] = {
+	/* GPIO */
+	{ IMANAGER_EC_DEVICE(ALTGPIO0, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO1, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO2, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO3, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO4, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO5, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO6, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(ALTGPIO7, GPIO, -1) },
+	/* FAN */
+	{ IMANAGER_EC_DEVICE(CPUFAN_2P,  PWM, 2) },
+	{ IMANAGER_EC_DEVICE(CPUFAN_4P,  PWM, 4) },
+	{ IMANAGER_EC_DEVICE(SYSFAN1_2P, PWM, 2) },
+	{ IMANAGER_EC_DEVICE(SYSFAN1_4P, PWM, 4) },
+	{ IMANAGER_EC_DEVICE(SYSFAN2_2P, PWM, 2) },
+	{ IMANAGER_EC_DEVICE(SYSFAN2_4P, PWM, 4) },
+	/* ADC */
+	{ IMANAGER_EC_DEVICE(ADC12VS0,    ADC, 1) },
+	{ IMANAGER_EC_DEVICE(ADC12VS0_2,  ADC, 2) },
+	{ IMANAGER_EC_DEVICE(ADC12VS0_10, ADC, 10) },
+	{ IMANAGER_EC_DEVICE(ADC5VS0,     ADC, 1) },
+	{ IMANAGER_EC_DEVICE(ADC5VS0_2,   ADC, 2) },
+	{ IMANAGER_EC_DEVICE(ADC5VS0_10,  ADC, 10) },
+	{ IMANAGER_EC_DEVICE(ADC5VS5,     ADC, 1) },
+	{ IMANAGER_EC_DEVICE(ADC5VS5_2,   ADC, 2) },
+	{ IMANAGER_EC_DEVICE(ADC5VS5_10,  ADC, 10) },
+	{ IMANAGER_EC_DEVICE(ADC33VS0,    ADC, 1) },
+	{ IMANAGER_EC_DEVICE(ADC33VS0_2,  ADC, 2) },
+	{ IMANAGER_EC_DEVICE(ADC33VS0_10, ADC, 10) },
+	{ IMANAGER_EC_DEVICE(CMOSBAT,     ADC, 1) },
+	{ IMANAGER_EC_DEVICE(CMOSBAT_2,   ADC, 2) },
+	{ IMANAGER_EC_DEVICE(CMOSBAT_10,  ADC, 10) },
+	{ IMANAGER_EC_DEVICE(VCOREA,      ADC, 1) },
+	{ IMANAGER_EC_DEVICE(CURRENT,     ADC, 1) },
+	/* I2C/SMBus */
+	{ IMANAGER_EC_DEVICE(SMBEEPROM,   SMB, -1) },
+	{ IMANAGER_EC_DEVICE(I2COEM,      SMB, -1) },
+	/* Backlight/Brightness */
+	{ IMANAGER_EC_DEVICE(BRIGHTNESS,  PWM, -1) },
+	{ IMANAGER_EC_DEVICE(BRIGHTNESS2, PWM, -1) },
+	/* Watchdog */
+	{ IMANAGER_EC_DEVICE(WDIRQ, IRQ,  -1) },
+	{ IMANAGER_EC_DEVICE(WDNMI, GPIO, -1) },
+	{ 0 }
 };
 
 /**
- * EC I/O
+ * iManager I/O
  */
 
-enum ec_io_buffer_status { IS_CLEARED = 0, IS_SET };
+enum imanager_io_buffer_status { IS_CLEARED = 0, IS_SET };
 
 #define CHECK_BIT(reg, bit) ((reg) & (bit))
 
 static inline int check_io28_ready(uint bit, uint state)
 {
-	int reg, i = 0;
+	int ret, i = 0;
 
 	do {
-		reg = inb(IT8528_CMD_PORT);
-		if (CHECK_BIT(reg, bit) == state)
+		ret = inb(IT8528_CMD_PORT);
+		if (CHECK_BIT(ret, bit) == state)
 			return 0;
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
 	} while (i++ < EC_MAX_RETRY);
@@ -155,281 +193,185 @@ static int imanager_check_ec_ready(struct imanager_io_ops *io)
 	return -ETIME;
 }
 
-enum ec_device_table_type { DEVID = 0, HWPIN, POLARITY };
+/**
+ * iManager Device Configuration
+ */
+
+static void imanager_add_attribute(struct imanager_ec_data *ec,
+				   struct imanager_device_attribute *attr)
+{
+	struct imanager_gpio_device *gpio = &ec->gpio;
+	struct imanager_adc_device *adc = &ec->hwmon.adc;
+	struct imanager_fan_device *fan = &ec->hwmon.fan;
+	struct imanager_i2c_device *i2c = &ec->i2c;
+	struct imanager_backlight_device *bl = &ec->bl;
+	struct imanager_watchdog_device *wdt = &ec->wdt;
+
+	switch (attr->devtbl->type) {
+	case GPIO:
+		switch (attr->did) {
+		case ALTGPIO0:
+		case ALTGPIO1:
+		case ALTGPIO2:
+		case ALTGPIO3:
+		case ALTGPIO4:
+		case ALTGPIO5:
+		case ALTGPIO6:
+		case ALTGPIO7:
+			gpio->attr[gpio->num++] = attr;
+			break;
+		case WDNMI:
+			wdt->attr[1] = attr;
+			wdt->num++;
+			break;
+		}
+	case ADC:
+		switch (attr->did) {
+		case ADC12VS0:
+		case ADC12VS0_2:
+		case ADC12VS0_10:
+			adc->attr[0] = attr;
+			adc->label[0] = "+12VS0";
+			adc->num++;
+			break;
+		case ADC5VS5:
+		case ADC5VS5_2:
+		case ADC5VS5_10:
+			adc->attr[1] = attr;
+			adc->label[1] = "+5VS0";
+			adc->num++;
+			break;
+		case CMOSBAT:
+		case CMOSBAT_2:
+		case CMOSBAT_10:
+			adc->attr[2] = attr;
+			adc->label[2] = "+3.3VS0";
+			adc->num++;
+			break;
+		case VCOREA:
+		case ADC5VS0:
+		case ADC5VS0_2:
+		case ADC5VS0_10:
+			adc->attr[3] = attr;
+			adc->num++;
+			break;
+		case CURRENT:
+		case ADC33VS0:
+		case ADC33VS0_2:
+		case ADC33VS0_10:
+			adc->attr[4] = attr;
+			adc->num++;
+			break;
+		}
+	case PWM:
+		switch (attr->did) {
+		case CPUFAN_2P:
+		case CPUFAN_4P:
+			fan->attr[0] = attr;
+			fan->label[0] = "FAN CPU";
+			fan->temp_label[0] = "Temp CPU";
+			fan->num++;
+			break;
+		case SYSFAN1_2P:
+		case SYSFAN1_4P:
+			fan->attr[1] = attr;
+			fan->label[1] = "FAN SYS1";
+			fan->temp_label[1] = "Temp SYS1";
+			fan->num++;
+			break;
+		case SYSFAN2_2P:
+		case SYSFAN2_4P:
+			fan->attr[2] = attr;
+			fan->label[2] = "FAN SYS2";
+			fan->temp_label[2] = "Temp SYS2";
+			fan->num++;
+			break;
+		case BRIGHTNESS:
+			bl->attr[0] = attr;
+			bl->brightness[0] = EC_OFFSET_BRIGHTNESS1;
+			bl->num++;
+			break;
+		case BRIGHTNESS2:
+			bl->attr[1] = attr;
+			bl->brightness[1] = EC_OFFSET_BRIGHTNESS2;
+			bl->num++;
+			break;
+		}
+	case SMB:
+		switch (attr->did) {
+		case SMBEEPROM:
+			i2c->attr[SMBEEP] = attr;
+			i2c->num++;
+			break;
+		case I2COEM:
+			i2c->attr[IICOEM] = attr;
+			i2c->num++;
+			break;
+		case SMBOEM0:
+			i2c->attr[SMB1] = attr;
+			i2c->num++;
+			break;
+		case PECI:
+			i2c->attr[SMBPECI] = attr;
+			i2c->num++;
+			break;
+		}
+	case IRQ:
+		if (attr->did == WDIRQ) {
+			wdt->attr[0] = attr;
+			wdt->num++;
+			break;
+		}
+	}
+}
+
+enum imanager_device_table_type { DEVID = 0, HWPIN, POLARITY };
 
 static int imanager_read_device_config(struct imanager_ec_data *ec)
 {
-	struct imanager_io_ops *io = &ec->io;
-	struct ec_message msgs[] = {
-		{	/* iManager Device ID */
-			.rlen = EC_MAX_DID,
-			.wlen = 0,
-			.param = DEVID,
-			.data = NULL,
-		}, {	/* iManager Hardware Pin */
-			.rlen = EC_MAX_DID,
-			.wlen = 0,
-			.param = HWPIN,
-			.data = NULL,
-		}, {	/* iManager Device Polarity */
-			.rlen = EC_MAX_DID,
-			.wlen = 0,
-			.param = POLARITY,
-			.data = NULL,
-		},
+	struct imanager_ec_message msgs[] = {
+		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, DEVID, NULL) },
+		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, HWPIN, NULL) },
+		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, POLARITY, NULL) },
 	};
-	struct imanager_device_config *cfg;
-	uint i, j;
-	int ret;
+	struct imanager_device_attribute *attr;
+	int i, j, ret;
 
 	/* Read iManager device configurations */
 	for (i = 0; i < ARRAY_SIZE(msgs); i++) {
-		ret = imanager_read(io, EC_CMD_DEV_TBL_RD, &msgs[i]);
+		ret = imanager_read(ec, EC_CMD_DEV_TBL_RD, &msgs[i]);
 		if (ret)
 			return ret;
 	}
 
-	/* Build device table */
-	for (i = 0; (i < EC_MAX_DID) && msgs[DEVID].u.data[i]; i++) {
-		cfg = &ec->cfg[i];
+	/* Read iManager device atributes */
+	for (i = 0; i < EC_MAX_DID && msgs[DEVID].u.data[i]; i++) {
+		attr = &ec->attr[i];
 		for (j = 0; j < ARRAY_SIZE(devtbl); j++) {
-			if (devtbl[j].id == msgs[DEVID].u.data[i]) {
-				cfg->did = msgs[DEVID].u.data[i];
-				cfg->hwp = msgs[HWPIN].u.data[i];
-				cfg->pol = msgs[POLARITY].u.data[i];
-				cfg->devtbl = &devtbl[j];
-				break;
+			if (devtbl[j].did == msgs[DEVID].u.data[i]) {
+				attr->did = msgs[DEVID].u.data[i];
+				attr->hwp = msgs[HWPIN].u.data[i];
+				attr->pol = msgs[POLARITY].u.data[i];
+				attr->devtbl = &devtbl[j];
+				imanager_add_attribute(ec, attr);
 			}
 		}
 	}
+
+	if (ec->gpio.num)
+		ec->features |= IMANAGER_FEATURE_GPIO;
+	if (ec->hwmon.adc.num)
+		ec->features |= IMANAGER_FEATURE_HWMON_ADC;
+	if (ec->hwmon.fan.num)
+		ec->features |= IMANAGER_FEATURE_HWMON_FAN;
+	if (ec->i2c.num)
+		ec->features |= IMANAGER_FEATURE_SMBUS;
+	if (ec->bl.num)
+		ec->features |= IMANAGER_FEATURE_BACKLIGHT;
+	if (ec->wdt.num)
+		ec->features |= IMANAGER_FEATURE_WDT;
 
 	return 0;
-}
-
-static inline void ec_get_dev_attr(struct ec_dev_attr *attr,
-				   const struct imanager_device_config *cfg)
-{
-	attr->did = cfg->did;
-	attr->hwp = cfg->hwp;
-	attr->pol = cfg->pol;
-	attr->scale = cfg->devtbl->scale;
-	attr->label = cfg->devtbl->label;
-}
-
-static void imanager_get_gpio(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct imanager_gpio_device *gpio = &ec->gpio;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if (cfg->devtbl->type == GPIO) {
-			switch (cfg->did) {
-			case ALTGPIO0:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO1:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO2:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO3:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO4:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO5:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO6:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			case ALTGPIO7:
-				ec_get_dev_attr(&gpio->attr[gpio->num++], cfg);
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (gpio->num)
-		ec->features |= IMANAGER_FEATURE_GPIO;
-}
-
-static void imanager_get_hwmon_adc(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct ec_dev_adc *adc = &ec->hwmon.adc;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if (cfg->devtbl->type == ADC) {
-			switch (cfg->did) {
-			case ADC12VS0:
-			case ADC12VS0_2:
-			case ADC12VS0_10:
-				ec_get_dev_attr(&adc->attr[0], cfg);
-				adc->num++;
-				break;
-			case ADC5VS5:
-			case ADC5VS5_2:
-			case ADC5VS5_10:
-				ec_get_dev_attr(&adc->attr[1], cfg);
-				adc->num++;
-				break;
-			case CMOSBAT:
-			case CMOSBAT_2:
-			case CMOSBAT_10:
-				ec_get_dev_attr(&adc->attr[2], cfg);
-				adc->num++;
-				break;
-			case VCOREA:
-			case ADC5VS0:
-			case ADC5VS0_2:
-			case ADC5VS0_10:
-				ec_get_dev_attr(&adc->attr[3], cfg);
-				adc->num++;
-				break;
-			case CURRENT:
-			case ADC33VS0:
-			case ADC33VS0_2:
-			case ADC33VS0_10:
-				ec_get_dev_attr(&adc->attr[4], cfg);
-				adc->num++;
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (adc->num)
-		ec->features |= IMANAGER_FEATURE_HWMON_ADC;
-}
-
-static void imanager_get_hwmon_fan(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct ec_dev_fan *fan = &ec->hwmon.fan;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if ((cfg->devtbl->type == TACH) ||
-		    (cfg->devtbl->type == PWM)) {
-			switch (cfg->did) {
-			case CPUFAN_2P:
-			case CPUFAN_4P:
-				fan->temp_label[fan->num] = fan_temp_labels[0];
-				ec_get_dev_attr(&fan->attr[fan->num++], cfg);
-				break;
-			case SYSFAN1_2P:
-			case SYSFAN1_4P:
-				fan->temp_label[fan->num] = fan_temp_labels[1];
-				ec_get_dev_attr(&fan->attr[fan->num++], cfg);
-				break;
-			case SYSFAN2_2P:
-			case SYSFAN2_4P:
-				fan->temp_label[fan->num] = fan_temp_labels[2];
-				ec_get_dev_attr(&fan->attr[fan->num++], cfg);
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (fan->num)
-		ec->features |= IMANAGER_FEATURE_HWMON_FAN;
-}
-
-static void imanager_get_i2c(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct imanager_i2c_device *i2c = &ec->i2c;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if (cfg->devtbl->type == SMB) {
-			switch (cfg->did) {
-			case SMBEEPROM:
-				ec_get_dev_attr(&i2c->attr[0], cfg);
-				i2c->eeprom = &i2c->attr[0];
-				i2c->num++;
-				break;
-			case I2COEM:
-				ec_get_dev_attr(&i2c->attr[1], cfg);
-				i2c->i2coem = &i2c->attr[1];
-				i2c->num++;
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (i2c->num)
-		ec->features |= IMANAGER_FEATURE_SMBUS;
-}
-
-static void imanager_get_backlight(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct imanager_backlight_device *bl = &ec->bl;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if (cfg->devtbl->type == PWM) {
-			switch (cfg->did) {
-			case BRIGHTNESS:
-				ec_get_dev_attr(&bl->attr[0], cfg);
-				bl->brightness[0] = EC_OFFSET_BRIGHTNESS1;
-				bl->num++;
-				break;
-			case BRIGHTNESS2:
-				ec_get_dev_attr(&bl->attr[1], cfg);
-				bl->brightness[1] = EC_OFFSET_BRIGHTNESS2;
-				bl->num++;
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (bl->num)
-		ec->features |= IMANAGER_FEATURE_BACKLIGHT;
-}
-
-static void imanager_get_wdt(struct imanager_ec_data *ec)
-{
-	size_t i;
-	struct imanager_device_config *cfg;
-	struct imanager_watchdog_device *wdt = &ec->wdt;
-
-	for (i = 0; i < ARRAY_SIZE(ec->cfg) && ec->cfg[i].did; i++) {
-		cfg = &ec->cfg[i];
-		if (cfg->devtbl->type == IRQ) {
-			switch (cfg->did) {
-			case WDIRQ:
-				ec_get_dev_attr(&wdt->attr[0], cfg);
-				wdt->irq = &wdt->attr[0];
-				wdt->num++;
-				break;
-			case WDNMI:
-				ec_get_dev_attr(&wdt->attr[1], cfg);
-				wdt->nmi = &wdt->attr[1];
-				wdt->num++;
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	if (wdt->num)
-		ec->features |= IMANAGER_FEATURE_WDT;
 }
 
 const char *project_code_to_str(char code)
@@ -457,18 +399,17 @@ const char *project_code_to_str(char code)
 static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 {
 	struct imanager_info *info = &ec->info;
-	struct imanager_io_ops *io = &ec->io;
-	uint val, len = PCB_NAME_SIZE;
-	struct ec_message msg = {
+	struct imanager_ec_message msg = {
 		.rlen = ARRAY_SIZE(info->pcb_name) - 1,
 		.wlen = 0,
 		.param = 0,
 		.data = info->pcb_name,
 	};
-	struct ec_version_raw ver;
+	struct imanager_ec_version ver;
+	unsigned int val;
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_OFFSET_FW_RELEASE,
+	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_FW_RELEASE,
 				(u8 *)&ver, sizeof(ver));
 	if (ret < 0)
 		return ret;
@@ -489,13 +430,14 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 	 * we need to read a fixed amount of chars. Then, the name length may
 	 * vary by one char (SOM6867 vs. SOM-6867).
 	 */
-	ret = imanager_read(io, EC_CMD_FW_INFO_RD, &msg);
+	ret = imanager_read(ec, EC_CMD_FW_INFO_RD, &msg);
 	if (ret)
 		return ret;
 
 	if (!strchr(info->pcb_name, '-'))
-		len -= 1;
-	info->pcb_name[len] = '\0';
+		info->pcb_name[PCB_NAME_SIZE - 1] = '\0';
+	else
+		info->pcb_name[PCB_NAME_SIZE] = '\0';
 
 	return 0;
 }
@@ -512,18 +454,7 @@ static int imanager_ec_init(struct imanager_ec_data *ec)
 	if (ret)
 		return ret;
 
-	ret = imanager_read_device_config(ec);
-	if (ret)
-		return ret;
-
-	imanager_get_backlight(ec);
-	imanager_get_gpio(ec);
-	imanager_get_hwmon_adc(ec);
-	imanager_get_hwmon_fan(ec);
-	imanager_get_i2c(ec);
-	imanager_get_wdt(ec);
-
-	return 0;
+	return imanager_read_device_config(ec);
 }
 
 static inline void data_to_ec(struct imanager_io_ops *io, u8 *data, u8 len,
@@ -544,36 +475,37 @@ static inline void data_from_ec(struct imanager_io_ops *io, u8 *data, u8 len,
 		data[i] = io->read(offset++);
 }
 
-static int imanager_msg_xfer(struct imanager_io_ops *io, u8 cmd,
-			     struct ec_message *msg, bool payload)
+static int imanager_msg_xfer(struct imanager_ec_data *ec, u8 cmd,
+			     struct imanager_ec_message *msg, bool payload)
 {
 	int ret;
 	int offset = EC_MSG_OFFSET_DATA;
 
-	ret = imanager_check_ec_ready(io);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
-	io->write(EC_MSG_OFFSET_PARAM, msg->param);
+	ec->io.write(EC_MSG_OFFSET_PARAM, msg->param);
 
 	if (msg->wlen) {
 		if (msg->data) {
-			data_to_ec(io, msg->data, msg->wlen, offset);
-			io->write(EC_MSG_OFFSET_LEN, msg->wlen);
+			data_to_ec(&ec->io, msg->data, msg->wlen, offset);
+			ec->io.write(EC_MSG_OFFSET_LEN, msg->wlen);
 		} else {
-			data_to_ec(io, msg->u.data, msg->wlen, offset);
+			data_to_ec(&ec->io, msg->u.data, msg->wlen, offset);
 		}
 	}
 
-	io->write(EC_MSG_OFFSET_CMD, cmd);
-	ret = imanager_check_ec_ready(io);
+	/* Execute command */
+	ec->io.write(EC_MSG_OFFSET_CMD, cmd);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
 	/* GPIO and I2C have different success return values */
-	ret = io->read(EC_MSG_OFFSET_STATUS);
-	if ((ret != EC_STATUS_SUCCESS) && !(ret & EC_STATUS_CMD_COMPLETE))
-		return -EIO;
+	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
+	if ((ret != EC_F_SUCCESS) && !(ret & EC_F_CMD_COMPLETE))
+		return -EFAULT;
 	/*
 	 * EC I2C may return an error code which we need to handoff
 	 * to the caller
@@ -582,14 +514,14 @@ static int imanager_msg_xfer(struct imanager_io_ops *io, u8 cmd,
 		return ret;
 
 	if (msg->rlen) {
-		if (msg->rlen == EC_FLAG_HWMON_MSG)
-			msg->rlen = io->read(EC_MSG_OFFSET_LEN);
+		if (msg->rlen == EC_F_HWMON_MSG)
+			msg->rlen = ec->io.read(EC_MSG_OFFSET_LEN);
 		if (payload) /* i2c, hwmon, wdt */
 			offset = EC_MSG_OFFSET_PAYLOAD;
 		if (msg->data)
-			data_from_ec(io, msg->data, msg->rlen, offset);
+			data_from_ec(&ec->io, msg->data, msg->rlen, offset);
 		else
-			data_from_ec(io, msg->u.data, msg->rlen, offset);
+			data_from_ec(&ec->io, msg->u.data, msg->rlen, offset);
 	}
 
 	return 0;
@@ -597,38 +529,35 @@ static int imanager_msg_xfer(struct imanager_io_ops *io, u8 cmd,
 
 /**
  * imanager_read_ram - read 'size' amount of data @ 'offset' of 'ram_type'
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @ram_type:	RAM type such as ACPI, HW, or EXternal
  * @offset:	offset within the RAM segment
  * @data:	data pointer
  * @len:	data length
  */
-int imanager_read_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
+int imanager_read_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
 		      u8 *data, u8 len)
 {
 	int ret;
 
-	if (!data)
-		return -EINVAL;
-
-	ret = imanager_check_ec_ready(io);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
-	io->write(EC_MSG_OFFSET_PARAM, ram_type);
-	io->write(EC_MSG_OFFSET_DATA, offset);
-	io->write(EC_MSG_OFFSET_LEN, len);
-	io->write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
+	ec->io.write(EC_MSG_OFFSET_PARAM, ram_type);
+	ec->io.write(EC_MSG_OFFSET_DATA, offset);
+	ec->io.write(EC_MSG_OFFSET_LEN, len);
+	ec->io.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
 
-	ret = imanager_check_ec_ready(io);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
-	ret = io->read(EC_MSG_OFFSET_STATUS);
-	if (ret != EC_STATUS_SUCCESS)
+	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
+	if (ret != EC_F_SUCCESS)
 		return -EIO;
 
-	data_from_ec(io, data, len, EC_MSG_OFFSET_RAM_DATA);
+	data_from_ec(&ec->io, data, len, EC_MSG_OFFSET_RAM_DATA);
 
 	return 0;
 }
@@ -636,38 +565,35 @@ EXPORT_SYMBOL_GPL(imanager_read_ram);
 
 /**
  * imanager_write_ram - write 'len' amount of data @ 'offset' of 'ram_type'
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @ram_type:	RAM type such as ACPI, HW, or EXternal
  * @offset:	offset within the RAM segment
  * @data:	data pointer
  * @len:	data length
  */
-int imanager_write_ram(struct imanager_io_ops *io, int ram_type, u8 offset,
+int imanager_write_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
 		       u8 *data, u8 len)
 {
 	int ret;
 
-	if (!data)
-		return -EINVAL;
-
-	ret = imanager_check_ec_ready(io);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
-	io->write(EC_MSG_OFFSET_PARAM, ram_type);
-	io->write(EC_MSG_OFFSET_DATA, offset);
-	io->write(EC_MSG_OFFSET_LEN, len);
+	ec->io.write(EC_MSG_OFFSET_PARAM, ram_type);
+	ec->io.write(EC_MSG_OFFSET_DATA, offset);
+	ec->io.write(EC_MSG_OFFSET_LEN, len);
 
-	data_to_ec(io, data, len, EC_MSG_OFFSET_RAM_DATA);
+	data_to_ec(&ec->io, data, len, EC_MSG_OFFSET_RAM_DATA);
 
-	io->write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
+	ec->io.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
 
-	ret = imanager_check_ec_ready(io);
+	ret = imanager_check_ec_ready(&ec->io);
 	if (ret)
 		return ret;
 
-	ret = io->read(EC_MSG_OFFSET_STATUS);
-	if (ret != EC_STATUS_SUCCESS)
+	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
+	if (ret != EC_F_SUCCESS)
 		return -EIO;
 
 	return 0;
@@ -676,45 +602,47 @@ EXPORT_SYMBOL_GPL(imanager_write_ram);
 
 /**
  * imanager_read - read data through request/response messaging
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
- * @msg:	ec_message structure
+ * @msg:	imanager_ec_message structure holding the message
  */
-int imanager_read(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg)
+int imanager_read(struct imanager_ec_data *ec, u8 cmd,
+		  struct imanager_ec_message *msg)
 {
-	return imanager_msg_xfer(io, cmd, msg, false);
+	return imanager_msg_xfer(ec, cmd, msg, false);
 }
 EXPORT_SYMBOL_GPL(imanager_read);
 
 /**
  * imanager_write - write data through request/response messaging
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
- * @msg:	ec_message structure
+ * @msg:	imanager_ec_message structure holding the message
  */
-int imanager_write(struct imanager_io_ops *io, u8 cmd, struct ec_message *msg)
+int imanager_write(struct imanager_ec_data *ec, u8 cmd,
+		   struct imanager_ec_message *msg)
 {
-	return imanager_msg_xfer(io, cmd, msg, true);
+	return imanager_msg_xfer(ec, cmd, msg, true);
 }
 EXPORT_SYMBOL_GPL(imanager_write);
 
 /**
  * imanager_read8 - read 8-bit data
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  */
-int imanager_read8(struct imanager_io_ops *io, u8 cmd, u8 param)
+int imanager_read8(struct imanager_ec_data *ec, u8 cmd, u8 param)
 {
 	int ret;
-	struct ec_message msg = {
+	struct imanager_ec_message msg = {
 		.rlen = 1,
 		.wlen = 0,
 		.param = param,
 		.data = NULL,
 	};
 
-	ret = imanager_read(io, cmd, &msg);
+	ret = imanager_read(ec, cmd, &msg);
 	if (ret)
 		return ret;
 
@@ -724,21 +652,21 @@ EXPORT_SYMBOL_GPL(imanager_read8);
 
 /**
  * imanager_read16 - read 16-bit data
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  */
-int imanager_read16(struct imanager_io_ops *io, u8 cmd, u8 param)
+int imanager_read16(struct imanager_ec_data *ec, u8 cmd, u8 param)
 {
 	int ret;
-	struct ec_message msg = {
+	struct imanager_ec_message msg = {
 		.rlen = 2,
 		.wlen = 0,
 		.param = param,
 		.data = NULL,
 	};
 
-	ret = imanager_read(io, cmd, &msg);
+	ret = imanager_read(ec, cmd, &msg);
 	if (ret)
 		return ret;
 
@@ -748,14 +676,14 @@ EXPORT_SYMBOL_GPL(imanager_read16);
 
 /**
  * imanager_write8 - write 8-bit data
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  * @byte:	8-bit data
  */
-int imanager_write8(struct imanager_io_ops *io, u8 cmd, u8 param, u8 byte)
+int imanager_write8(struct imanager_ec_data *ec, u8 cmd, u8 param, u8 byte)
 {
-	struct ec_message msg = {
+	struct imanager_ec_message msg = {
 		.rlen = 0,
 		.wlen = 1,
 		.param = param,
@@ -764,20 +692,20 @@ int imanager_write8(struct imanager_io_ops *io, u8 cmd, u8 param, u8 byte)
 		},
 	};
 
-	return imanager_write(io, cmd, &msg);
+	return imanager_write(ec, cmd, &msg);
 }
 EXPORT_SYMBOL_GPL(imanager_write8);
 
 /**
  * imanager_write16 - write 16-bit data
- * @io:		imanager_io_ops structure providing I/O operations
+ * @ec:		imanager_ec_data structure describing the EC
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  * @word:	16-bit data
  */
-int imanager_write16(struct imanager_io_ops *io, u8 cmd, u8 param, u16 word)
+int imanager_write16(struct imanager_ec_data *ec, u8 cmd, u8 param, u16 word)
 {
-	struct ec_message msg = {
+	struct imanager_ec_message msg = {
 		.rlen = 0,
 		.wlen = 2,
 		.param = param,
@@ -786,7 +714,7 @@ int imanager_write16(struct imanager_io_ops *io, u8 cmd, u8 param, u16 word)
 		},
 	};
 
-	return imanager_write(io, cmd, &msg);
+	return imanager_write(ec, cmd, &msg);
 }
 EXPORT_SYMBOL_GPL(imanager_write16);
 
@@ -798,9 +726,10 @@ enum imanager_cells {
 	IMANAGER_WDT,
 };
 
-/*
+/**
  * iManager devices which are available via firmware.
  */
+
 static const struct mfd_cell imanager_devs[] = {
 	[IMANAGER_BACKLIGHT] = {
 		.name = "imanager-backlight",
@@ -858,7 +787,7 @@ imanager_board_show(struct device *dev, struct device_attribute *attr,
 		    char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
-	const struct imanager_info *info = &data->ec.info;
+	struct imanager_info *info = &data->ec.info;
 
 	return scnprintf(buf, PAGE_SIZE, "%s\n", info->pcb_name);
 }
@@ -867,7 +796,7 @@ static ssize_t imanager_kernel_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
-	const struct imanager_info *info = &data->ec.info;
+	struct imanager_info *info = &data->ec.info;
 
 	return scnprintf(buf, PAGE_SIZE, "%d.%d\n", info->kernel_major,
 			 info->kernel_minor);
@@ -877,7 +806,7 @@ static ssize_t imanager_firmware_show(struct device *dev,
 				      struct device_attribute *attr, char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
-	const struct imanager_info *info = &data->ec.info;
+	struct imanager_info *info = &data->ec.info;
 
 	return scnprintf(buf, PAGE_SIZE, "%d.%d\n", info->firmware_major,
 			 info->firmware_minor);
@@ -887,7 +816,7 @@ static ssize_t
 imanager_type_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
-	const struct imanager_info *info = &data->ec.info;
+	struct imanager_info *info = &data->ec.info;
 
 	return scnprintf(buf, PAGE_SIZE, "%s\n", info->type);
 }

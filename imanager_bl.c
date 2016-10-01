@@ -59,34 +59,33 @@ static int imanager_bl_enable(struct imanager_ec_data *ec, int unit)
 {
 	u8 val8;
 	struct brightness_level *ctrl = (struct brightness_level *)&val8;
-	u8 devid = ec->bl.attr[unit].did;
+	u8 devid = ec->bl.attr[unit]->did;
 	u8 bl_unit = ec->bl.brightness[unit];
-	struct imanager_io_ops *io = &ec->io;
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, bl_unit, &val8, sizeof(val8));
+	ret = imanager_read_ram(ec, EC_RAM_ACPI, bl_unit, &val8, sizeof(val8));
 	if (ret < 0)
 		return ret;
 
 	ctrl->enable = 1;
 
-	return imanager_write_ram(io, EC_RAM_ACPI, devid, &val8, sizeof(val8));
+	return imanager_write_ram(ec, EC_RAM_ACPI, devid, &val8, sizeof(val8));
 }
 
-static int imanager_bl_set_polarity(struct imanager_io_ops *io, uint polarity)
+static int imanager_bl_set_polarity(struct imanager_ec_data *ec, uint polarity)
 {
 	u8 val8;
 	struct backlight_ctrl *ctrl = (struct backlight_ctrl *)&val8;
 	int ret;
 
-	ret = imanager_read_ram(io, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
+	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
 				&val8, sizeof(val8));
 	if (ret < 0)
 		return ret;
 
 	ctrl->blpol = polarity ? 1 : 0;
 
-	return imanager_write_ram(io, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
+	return imanager_write_ram(ec, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
 				  &val8, sizeof(val8));
 }
 
@@ -94,13 +93,12 @@ static int imanager_bl_get_brightness(struct backlight_device *bd)
 {
 	struct imanager_backlight_data *data = bl_get_data(bd);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	u8 devid = imgr->ec.bl.attr[unit].did;
+	u8 devid = imgr->ec.bl.attr[unit]->did;
 	int pwm;
 
 	mutex_lock(&imgr->lock);
 
-	pwm = imanager_read8(io, EC_CMD_HWP_RD, devid);
+	pwm = imanager_read8(&imgr->ec, EC_CMD_HWP_RD, devid);
 	if (pwm < 0) {
 		dev_warn(&bd->dev, "Failed while reading PWM\n");
 		pwm = 0;
@@ -115,8 +113,7 @@ static int imanager_bl_set_brightness(struct backlight_device *bd)
 {
 	struct imanager_backlight_data *data = bl_get_data(bd);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	u8 devid = imgr->ec.bl.attr[unit].did;
+	u8 devid = imgr->ec.bl.attr[unit]->did;
 	u8 brightness = bd->props.brightness;
 	int ret;
 
@@ -133,7 +130,7 @@ static int imanager_bl_set_brightness(struct backlight_device *bd)
 	brightness = polarity ? BL_MAX_PWM - brightness : brightness;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_write8(io, EC_CMD_HWP_WR, devid, brightness);
+	ret = imanager_write8(&imgr->ec, EC_CMD_HWP_WR, devid, brightness);
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -154,6 +151,7 @@ static int imanager_bl_init(struct device *dev,
 {
 	struct backlight_device *bd;
 	struct backlight_properties props;
+	int ret;
 
 	memset(&props, 0, sizeof(props));
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,38)
@@ -189,6 +187,14 @@ static int imanager_bl_init(struct device *dev,
 
 	backlight_update_status(bd);
 
+	ret = imanager_bl_enable(&data->imgr->ec, unit);
+	if (ret < 0)
+		dev_warn(dev, "Could not enable backlight control\n");
+
+	ret = imanager_bl_set_polarity(&data->imgr->ec, polarity);
+	if (ret < 0)
+		dev_warn(dev, "Could not set backlight polarity\n");
+
 	return 0;
 }
 
@@ -210,14 +216,6 @@ static int imanager_bl_probe(struct platform_device *pdev)
 		return ret;
 
 	platform_set_drvdata(pdev, data);
-
-	ret = imanager_bl_enable(&imgr->ec, unit);
-	if (ret < 0)
-		dev_warn(dev, "Could not enable backlight control\n");
-
-	ret = imanager_bl_set_polarity(&imgr->ec.io, polarity);
-	if (ret < 0)
-		dev_warn(dev, "Could not set backlight polarity\n");
 
 	return 0;
 }

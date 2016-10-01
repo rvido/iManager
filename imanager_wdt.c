@@ -39,13 +39,17 @@ MODULE_PARM_DESC(timeout,
 	"Watchdog timeout in seconds. 1 <= timeout <= 65534, default="
 	__MODULE_STRING(WDT_DEFAULT_TIMEOUT) ".");
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, 0);
 MODULE_PARM_DESC(nowayout,
 	"Watchdog cannot be stopped once started (default="
 	__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+#endif
 
-enum wdt_ctrl { START = 1, STOP, RST, GET_TIMEOUT, SET_TIMEOUT, STOPBOOT = 8 };
+enum wdt_ctrl {
+	START = 1, STOP, RESET, GET_TIMEOUT, SET_TIMEOUT, STOPBOOT = 8
+};
 
 enum imanager_wdt_event {
 	WDT_EVT_NONE,
@@ -67,15 +71,12 @@ struct event_delay {
 		dummy;
 } __attribute__((__packed__));
 
-static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
+static int imanager_wdt_ctrl(struct imanager_ec_data *ec, int ctrl,
 			     int event_type, uint timeout)
 {
-	uint val;
-	int ret;
-	struct ec_message msg = {
-		.rlen = 0,
-		.param = ctrl,
-		.data = NULL,
+	int val, ret;
+	struct imanager_ec_message msg = {
+		IMANAGER_MSG_SIMPLE(0, 0, ctrl, NULL)
 	};
 	u8 *fevent = &msg.u.data[0];
 	struct event_delay *event = (struct event_delay *)&msg.u.data[1];
@@ -112,7 +113,7 @@ static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
 		break;
 	case START:
 	case STOP:
-	case RST:
+	case RESET:
 	case STOPBOOT:
 		msg.wlen = 0; /* simple command, no data */
 		break;
@@ -120,7 +121,7 @@ static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
 		return -EINVAL;
 	}
 
-	ret = imanager_write(io, EC_CMD_WDT_CTRL, &msg);
+	ret = imanager_write(ec, EC_CMD_WDT_CTRL, &msg);
 	if (ret < 0)
 		return ret;
 
@@ -129,15 +130,15 @@ static int imanager_wdt_ctrl(struct imanager_io_ops *io, int ctrl,
 
 static inline int imanager_wdt_disable_all(struct imanager_wdt_data *data)
 {
-	struct imanager_io_ops *io = &data->imgr->ec.io;
+	struct imanager_ec_data *ec = &data->imgr->ec;
 
-	return (imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0) ||
-		imanager_wdt_ctrl(io, STOPBOOT, WDT_EVT_NONE, 0));
+	return (imanager_wdt_ctrl(ec, STOP, WDT_EVT_NONE, 0) ||
+		imanager_wdt_ctrl(ec, STOPBOOT, WDT_EVT_NONE, 0));
 }
 
 static int imanager_wdt_set(struct imanager_wdt_data *data, uint timeout)
 {
-	struct imanager_io_ops *io = &data->imgr->ec.io;
+	struct imanager_ec_data *ec = &data->imgr->ec;
 	int ret;
 
 	if (time_before(jiffies, data->last_updated + HZ + HZ / 2))
@@ -146,7 +147,7 @@ static int imanager_wdt_set(struct imanager_wdt_data *data, uint timeout)
 	if (data->timeout == timeout)
 		return 0;
 
-	ret = imanager_wdt_ctrl(io, SET_TIMEOUT, WDT_EVT_PWRBTN, timeout);
+	ret = imanager_wdt_ctrl(ec, SET_TIMEOUT, WDT_EVT_PWRBTN, timeout);
 	if (ret < 0)
 		return ret;
 
@@ -169,6 +170,7 @@ static int imanager_wdt_set_timeout(struct watchdog_device *wdt, uint timeout)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 static uint imanager_wdt_get_timeleft(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
@@ -180,16 +182,16 @@ static uint imanager_wdt_get_timeleft(struct watchdog_device *wdt)
 
 	return timeleft;
 }
+#endif
 
 static int imanager_wdt_start(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int ret;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
+	ret = imanager_wdt_ctrl(&imgr->ec, STOP, WDT_EVT_NONE, 0);
 	data->last_updated = jiffies;
 	mutex_unlock(&imgr->lock);
 
@@ -200,11 +202,10 @@ static int imanager_wdt_stop(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int ret;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
+	ret = imanager_wdt_ctrl(&imgr->ec, STOP, WDT_EVT_NONE, 0);
 	data->last_updated = 0;
 	mutex_unlock(&imgr->lock);
 
@@ -215,11 +216,10 @@ static int imanager_wdt_ping(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
 	int ret;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(io, RST, WDT_EVT_NONE, 0);
+	ret = imanager_wdt_ctrl(&imgr->ec, RESET, WDT_EVT_NONE, 0);
 	data->last_updated = jiffies;
 	mutex_unlock(&imgr->lock);
 
@@ -240,7 +240,9 @@ static const struct watchdog_ops imanager_wdt_ops = {
 	.stop		= imanager_wdt_stop,
 	.ping		= imanager_wdt_ping,
 	.set_timeout	= imanager_wdt_set_timeout,
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 	.get_timeleft	= imanager_wdt_get_timeleft,
+#endif
 };
 
 static int imanager_wdt_probe(struct platform_device *pdev)
@@ -264,7 +266,9 @@ static int imanager_wdt_probe(struct platform_device *pdev)
 	wdt_dev->min_timeout	= 1;
 	wdt_dev->max_timeout	= 0xfffe;
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 	watchdog_set_nowayout(wdt_dev, nowayout);
+#endif
 	watchdog_set_drvdata(wdt_dev, data);
 
 	ret = watchdog_register_device(wdt_dev);
@@ -287,8 +291,10 @@ static int imanager_wdt_remove(struct platform_device *pdev)
 {
 	struct imanager_wdt_data *data = platform_get_drvdata(pdev);
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0)
 	if (!nowayout)
 		imanager_wdt_disable_all(data);
+#endif
 
 	watchdog_unregister_device(&data->wdt);
 	platform_set_drvdata(pdev, NULL);
@@ -299,10 +305,9 @@ static int imanager_wdt_remove(struct platform_device *pdev)
 static void imanager_wdt_shutdown(struct platform_device *pdev)
 {
 	struct imanager_device_data *imgr = dev_get_drvdata(pdev->dev.parent);
-	struct imanager_io_ops *io = &imgr->ec.io;
 
 	mutex_lock(&imgr->lock);
-	imanager_wdt_ctrl(io, STOP, WDT_EVT_NONE, 0);
+	imanager_wdt_ctrl(&imgr->ec, STOP, WDT_EVT_NONE, 0);
 	mutex_unlock(&imgr->lock);
 }
 

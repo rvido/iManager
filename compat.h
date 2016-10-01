@@ -10,8 +10,6 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
-#include <linux/io.h>
-#include <linux/ioport.h>
 #include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
@@ -37,9 +35,9 @@ static void __exit __platform_driver##_exit(void) \
 module_exit(__platform_driver##_exit);
 #endif /* module_platform_driver */
 
-#ifdef __NEED_HWMON_COMPAT__
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0) && ! defined(__RHEL7__)
-#if ! defined(__RHEL6__)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+#if !(defined RHEL_MAJOR && RHEL_MAJOR == 7)
+#if !(defined RHEL_MAJOR && RHEL_MAJOR == 6 && RHEL_MINOR >= 7)
 static int sysfs_create_groups(struct kobject *kobj,
 			       const struct attribute_group **groups)
 {
@@ -59,7 +57,6 @@ static int sysfs_create_groups(struct kobject *kobj,
 	}
 	return error;
 }
-#endif
 
 static void sysfs_remove_groups(struct kobject *kobj,
 				const struct attribute_group **groups)
@@ -71,8 +68,11 @@ static void sysfs_remove_groups(struct kobject *kobj,
 	for (i = 0; groups[i]; i++)
 		sysfs_remove_group(kobj, groups[i]);
 }
+#endif
+#endif
 
-#if ! defined(__RHEL6__)
+#if !(defined RHEL_MAJOR && RHEL_MAJOR == 7)
+#if !(defined RHEL_MAJOR && RHEL_MAJOR == 6 && RHEL_MINOR >= 7)
 static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 {
 	if (IS_ERR(ptr))
@@ -82,9 +82,9 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 }
 #endif
 #endif
-#endif /* __NEED_HWMON_COMPAT__ */
+#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) || defined(__RHEL6__)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) || defined RHEL_MAJOR && RHEL_MAJOR == 6
 enum pwm_polarity {
 	PWM_POLARITY_NORMAL,
 	PWM_POLARITY_INVERSED,
@@ -96,9 +96,11 @@ enum pwm_polarity {
 #define GPIOF_DIR_IN    1UL
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0) || defined(__RHEL6__)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
+#if defined RHEL_MAJOR && RHEL_MAJOR == 6
 #undef umode_t
 #define umode_t mode_t
+#endif
 #endif
 
 #endif /* __COMPAT_H__ */

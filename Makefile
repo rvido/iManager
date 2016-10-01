@@ -12,10 +12,6 @@ STRIP		:= $(shell which strip)
 DRVPATH		:= /lib/modules/$(shell uname -r)/extra/$(NAME)
 INCLUDE		:= $(src)
 
-# OS specific switches
-# EXTRA_CFLAGS	+= -D__RHEL6__
-# EXTRA_CFLAGS	+= -D__RHEL7__
-
 ccflags-y	+= -Wall -O3 $(EXTRA_CFLAGS) -I$(INCLUDE)
 
 ifneq ($(KERNELRELEASE), )

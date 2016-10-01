@@ -43,11 +43,11 @@ static int imanager_gpio_direction_in(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	int gpio_did = imgr->ec.gpio.attr[offset].did;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
 	mutex_lock(&imgr->lock);
-	imanager_write8(io, EC_CMD_GPIO_DIR_WR, gpio_did, EC_GPIOF_DIR_IN);
+	imanager_write8(&imgr->ec, EC_CMD_GPIO_DIR_WR, attr->did,
+			EC_GPIOF_DIR_IN);
 	mutex_unlock(&imgr->lock);
 
 	return 0;
@@ -58,11 +58,11 @@ imanager_gpio_direction_out(struct gpio_chip *chip, uint offset, int val)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	int gpio_did = imgr->ec.gpio.attr[offset].did;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
 	mutex_lock(&imgr->lock);
-	imanager_write8(io, EC_CMD_GPIO_DIR_WR, gpio_did, EC_GPIOF_DIR_OUT);
+	imanager_write8(&imgr->ec, EC_CMD_GPIO_DIR_WR, attr->did,
+			EC_GPIOF_DIR_OUT);
 	mutex_unlock(&imgr->lock);
 
 	return 0;
@@ -73,12 +73,11 @@ static int imanager_gpio_get_direction(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	int gpio_did = imgr->ec.gpio.attr[offset].did;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 	int ret;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_read8(io, EC_CMD_GPIO_DIR_RD, gpio_did);
+	ret = imanager_read8(&imgr->ec, EC_CMD_GPIO_DIR_RD, attr->did);
 	mutex_unlock(&imgr->lock);
 
 	return ret & EC_GPIOF_DIR_IN ? GPIOF_DIR_IN : GPIOF_DIR_OUT;
@@ -89,26 +88,24 @@ static int imanager_gpio_get(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	int gpio_did = imgr->ec.gpio.attr[offset].did;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 	int ret;
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_read8(io, EC_CMD_HWP_RD, gpio_did);
+	ret = imanager_read8(&imgr->ec, EC_CMD_HWP_RD, attr->did);
 	mutex_unlock(&imgr->lock);
 
-	return !!ret;
+	return ret;
 }
 
 static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_io_ops *io = &imgr->ec.io;
-	int gpio_did = imgr->ec.gpio.attr[offset].did;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
 	mutex_lock(&imgr->lock);
-	imanager_write8(io, EC_CMD_HWP_WR, gpio_did, val);
+	imanager_write8(&imgr->ec, EC_CMD_HWP_WR, attr->did, val);
 	mutex_unlock(&imgr->lock);
 }
 
