@@ -38,6 +38,9 @@ static const char * const chip_names[] = {
 	NULL
 };
 
+#define IMANAGER_EC_DEVICE(device_id, device_type, scaling_factor) \
+	.did = (device_id), .type = (device_type), .scale = (scaling_factor)
+
 static const struct imanager_device_table_entry devtbl[] = {
 	/* GPIO */
 	{ IMANAGER_EC_DEVICE(ALTGPIO0, GPIO, -1) },
@@ -76,6 +79,8 @@ static const struct imanager_device_table_entry devtbl[] = {
 	/* I2C/SMBus */
 	{ IMANAGER_EC_DEVICE(SMBEEPROM,   SMB, -1) },
 	{ IMANAGER_EC_DEVICE(I2COEM,      SMB, -1) },
+	{ IMANAGER_EC_DEVICE(SMBOEM0,     SMB, -1) },
+	{ IMANAGER_EC_DEVICE(SMBPECI,     SMB, -1) },
 	/* Backlight/Brightness */
 	{ IMANAGER_EC_DEVICE(BRIGHTNESS,  PWM, -1) },
 	{ IMANAGER_EC_DEVICE(BRIGHTNESS2, PWM, -1) },
@@ -300,19 +305,19 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 	case SMB:
 		switch (attr->did) {
 		case SMBEEPROM:
-			i2c->attr[SMBEEP] = attr;
+			i2c->attr[SMB_EEP] = attr;
 			i2c->num++;
 			break;
 		case I2COEM:
-			i2c->attr[IICOEM] = attr;
+			i2c->attr[I2C_OEM] = attr;
 			i2c->num++;
 			break;
 		case SMBOEM0:
-			i2c->attr[SMB1] = attr;
+			i2c->attr[SMB_1] = attr;
 			i2c->num++;
 			break;
-		case PECI:
-			i2c->attr[SMBPECI] = attr;
+		case SMBPECI:
+			i2c->attr[SMB_PECI] = attr;
 			i2c->num++;
 			break;
 		}
@@ -344,7 +349,7 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 			return ret;
 	}
 
-	/* Read iManager device atributes */
+	/* Generate iManager device atributes */
 	for (i = 0; i < EC_MAX_DID && msgs[DEVID].u.data[i]; i++) {
 		attr = &ec->attr[i];
 		for (j = 0; j < ARRAY_SIZE(devtbl); j++) {
@@ -354,6 +359,7 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 				attr->pol = msgs[POLARITY].u.data[i];
 				attr->devtbl = &devtbl[j];
 				imanager_add_attribute(ec, attr);
+				break;
 			}
 		}
 	}
@@ -769,7 +775,7 @@ static int imanager_register_cells(struct imanager_device_data *imgr)
 	if (ec->features & IMANAGER_FEATURE_WDT)
 		devs[i++] = imanager_devs[IMANAGER_WDT];
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0)
 	return mfd_add_devices(imgr->dev, -1, devs, i, NULL, 0);
 #else
 	return mfd_add_devices(imgr->dev, -1, devs, i, NULL, 0, NULL);
@@ -946,7 +952,7 @@ static int imanager_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_driver = {
 	.driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
 		.owner = THIS_MODULE,
 #endif
 		.name  = "imanager",

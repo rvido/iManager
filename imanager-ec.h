@@ -124,7 +124,7 @@
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
 #define EC_PROJECT_CODE(x)		((char)(x & 0xff))
 
-enum imanager_smbus_channel { SMBEEP = 0, IICOEM, SMB1, SMBPECI };
+enum imanager_smb_cells { SMB_EEP = 0, I2C_OEM, SMB_1, SMB_PECI };
 
 enum imanager_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
 
@@ -133,17 +133,14 @@ enum imanager_device_id {
 	ALTGPIO0 = 0x10, ALTGPIO1, ALTGPIO2, ALTGPIO3, ALTGPIO4, ALTGPIO5,
 	ALTGPIO6, ALTGPIO7,
 	/* FAN */
-	CPUFAN_2P = 0x20, CPUFAN_4P,
-	SYSFAN1_2P, SYSFAN1_4P, SYSFAN2_2P, SYSFAN2_4P,
+	CPUFAN_2P = 0x20, CPUFAN_4P, SYSFAN1_2P, SYSFAN1_4P,
+	SYSFAN2_2P, SYSFAN2_4P,
 	/* Brightness Control */
 	BRIGHTNESS = 0x26,
 	/* SMBus */
 	SMBOEM0	 = 0x28, SMBOEM1, SMBOEM2, SMBEEPROM,
-	SMBTHERMAL0 = 0x2C, SMBTHERMAL1, SMBSECEEP, I2COEM,
-	/* Speaker */
-	SPEAKER  = 0x30,
-	/* SMBus */
-	SMBEEP2K = 0x38, OEMEEP, OEMEEP2K, PECI, SMBOEM3, SMLINK, SMBSLV,
+	SMBTHM0  = 0x2C, SMBTHM1, SMBSECEEP, I2COEM,
+	SMBEEP2K = 0x38, OEMEEP, OEMEEP2K, SMBPECI, SMBOEM3, SMLINK, SMBSLV,
 	/* LED */
 	POWERLED = 0x40, BATLEDG, OEMLED0, OEMLED1, OEMLED2, BATLEDR,
 	/* ADC */
@@ -167,9 +164,6 @@ enum imanager_device_id {
 	BRIGHTNESS2 = 0x88,
 	BACKLIGHT1, BACKLIGHT2
 };
-
-#define IMANAGER_EC_DEVICE(device_id, device_type, scaling_factor) \
-	.did = (device_id), .type = (device_type), .scale = (scaling_factor)
 
 /**
  * struct imanager_device_table_row - Describes iManager EC Device

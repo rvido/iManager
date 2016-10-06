@@ -41,20 +41,31 @@
 #define U16_LO(x)		((x) & 0xff)
 #define U16_HI(x)		U16_LO((x) >> 8)
 
-static uint bus_frequency = 100;
-module_param(bus_frequency, uint, 0);
-MODULE_PARM_DESC(bus_frequency,
-	"SMBus bus frequency [50, 100, 400]kHz (defaults to 100kHz)");
+#define SMBUS_FREQ_50KHZ	0x0100
+#define SMBUS_FREQ_100KHZ	0x0200
+#define SMBUS_FREQ_400KHZ	0x0300
+
+#define imanager_i2c_wr_combined(ec, message) \
+	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_WR, message)
+
+#define imanager_i2c_rw_combined(ec, message) \
+	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_RW, message)
 
 struct ec_i2c_status {
 	u32 error	: 7;
 	u32 complete	: 1;
 };
 
+struct adapter_info {
+	struct i2c_adapter adapter;
+	int smb_devid;
+};
+
 struct imanager_i2c_data {
-	struct device			*dev;
-	struct imanager_device_data	*imgr;
-	struct i2c_adapter		adapter;
+	struct device *dev;
+	struct imanager_device_data *imgr;
+	struct adapter_info adap_info[EC_MAX_SMB_NUM];
+	int nadap;
 };
 
 static int imanager_i2c_eval_status(u8 status)
@@ -132,67 +143,11 @@ static int imanager_i2c_block_wr_rw_combined(struct imanager_ec_data *ec,
 	return 0;
 }
 
-static int imanager_i2c_read_freq(struct imanager_ec_data *ec, uint bus_id)
+static inline int
+imanager_i2c_write_freq(struct imanager_ec_data *ec, int did, int freq)
 {
-	int ret = 0, f;
-	int freq_id, freq;
-
-	ret = imanager_read16(ec, EC_CMD_SMB_FREQ_RD, bus_id);
-	if (ret < 0)
-		return ret;
-
-	freq_id = U16_HI(ret);
-	f = U16_LO(ret);
-	switch (freq_id) {
-	case 0:
-		freq = f;
-		break;
-	case 1:
-		freq = 50;
-		break;
-	case 2:
-		freq = 100;
-		break;
-	case 3:
-		freq = 400;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return freq;
+	return imanager_write16(ec, EC_CMD_SMB_FREQ_WR, did, freq);
 }
-
-static int
-imanager_i2c_write_freq(struct imanager_ec_data *ec, uint bus_id, uint freq)
-{
-	uint val;
-
-	switch (freq) {
-	case 50:
-		val = 0x0100;
-		break;
-	case 100:
-		val = 0x0200;
-		break;
-	case 400:
-		val = 0x0300;
-		break;
-	default:
-		if (freq < 50)
-			val = freq;
-		else
-			return -EINVAL;
-	}
-
-	return imanager_write16(ec, EC_CMD_SMB_FREQ_WR, bus_id, val);
-}
-
-#define imanager_i2c_wr_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_WR, message)
-
-#define imanager_i2c_rw_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_RW, message)
 
 static int imanager_i2c_read_block(struct imanager_ec_data *ec,
 				   struct imanager_ec_message *msg, u8 *buf)
@@ -231,13 +186,14 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_ec_data *ec = &imgr->ec;
 	struct device *dev = data->dev;
+	int smb_devid = *(int *)adap->algo_data;
 	int val, len, ret = 0;
 	u16 addr16 = addr << 1; /* convert to 8-bit i2c slave address */
 	u8 *buf = smb_data->block;
 	struct imanager_ec_message msg = {
 		.rlen = 0,
 		.wlen = EC_MSG_HDR_SIZE,
-		.param = imgr->ec.i2c.attr[SMBEEP]->did,
+		.param = smb_devid,
 		.u = {
 			.smb.hdr = {
 				.addr_low  = U16_LO(addr16),
@@ -403,72 +359,114 @@ static const struct i2c_algorithm imanager_i2c_algorithm = {
 	.functionality  = imanager_i2c_func,
 };
 
-static const struct i2c_adapter imanager_i2c_adapter = {
-	.owner		= THIS_MODULE,
-	.name		= "SMBus iManager adapter",
-	.class		= I2C_CLASS_HWMON | I2C_CLASS_SPD,
-	.algo		= &imanager_i2c_algorithm,
-	.retries	= 3,
+static const struct i2c_adapter imanager_i2c_adapters[] = {
+	[SMB_EEP] = {
+		.owner	= THIS_MODULE,
+		.name	= "iManager SMB EEP adapter",
+		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
+		.algo	= &imanager_i2c_algorithm,
+	},
+	[I2C_OEM] = {
+		.owner	= THIS_MODULE,
+		.name	= "iManager I2C OEM adapter",
+		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
+		.algo	= &imanager_i2c_algorithm,
+	},
+	[SMB_1] = {
+		.owner	= THIS_MODULE,
+		.name	= "iManager SMB 1 adapter",
+		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
+		.algo	= &imanager_i2c_algorithm,
+	},
+	[SMB_PECI] = {
+		.owner	= THIS_MODULE,
+		.name	= "iManager SMB PECI adapter",
+		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
+		.algo	= &imanager_i2c_algorithm,
+	},
 };
+
+static int
+imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
+		     const struct i2c_adapter *adap, int did, int freq)
+{
+	int ret;
+
+	info->adapter = *adap;
+	info->adapter.dev.parent = i2c->dev;
+	info->smb_devid = did;
+	info->adapter.algo_data = &info->smb_devid;
+	i2c_set_adapdata(&info->adapter, i2c);
+
+	ret = i2c_add_adapter(&info->adapter);
+	if (ret) {
+		dev_warn(i2c->dev, "Failed to add %s\n", info->adapter.name);
+		return ret;
+	}
+
+	ret = imanager_i2c_write_freq(&i2c->imgr->ec, did, freq);
+	if (ret < 0)
+		dev_warn(i2c->dev, "Failed to set bus frequency of %s\n",
+			 info->adapter.name);
+
+	return 0;
+}
 
 static int imanager_i2c_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct imanager_device_data *imgr = dev_get_drvdata(dev->parent);
-	struct imanager_i2c_data *i2c;
-	int ret;
+	struct imanager_device_attribute **attr = imgr->ec.i2c.attr;
+	struct imanager_i2c_data *data;
 
-	i2c = devm_kzalloc(dev, sizeof(*i2c), GFP_KERNEL);
-	if (!i2c)
+	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
 		return -ENOMEM;
 
-	i2c->imgr = imgr;
-	i2c->dev = dev;
-	i2c->adapter = imanager_i2c_adapter;
-	i2c->adapter.dev.parent = dev;
+	data->imgr = imgr;
+	data->dev = dev;
 
-	i2c_set_adapdata(&i2c->adapter, i2c);
-	platform_set_drvdata(pdev, i2c);
+	if (attr[SMB_EEP])
+		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
+				     &imanager_i2c_adapters[SMB_EEP],
+				     attr[SMB_EEP]->did, SMBUS_FREQ_100KHZ);
 
-	ret = i2c_add_adapter(&i2c->adapter);
-	if (ret) {
-		dev_err(dev, "Failed to add SMBus adapter\n");
-		return ret;
-	}
+	if (attr[I2C_OEM])
+		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
+				     &imanager_i2c_adapters[I2C_OEM],
+				     attr[I2C_OEM]->did, SMBUS_FREQ_400KHZ);
 
-	if (bus_frequency > 100)
-		bus_frequency = 400;
-	else if (bus_frequency < 50)
-		bus_frequency = 50;
-	else
-		bus_frequency = 100;
+	if (attr[SMB_1])
+		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
+				     &imanager_i2c_adapters[SMB_1],
+				     attr[SMB_1]->did, SMBUS_FREQ_100KHZ);
 
-	ret = imanager_i2c_write_freq(&imgr->ec, I2COEM, bus_frequency);
-	if (ret < 0)
-		dev_warn(dev, "Could not set SMBus frequency\n");
+	if (attr[SMB_PECI])
+		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
+				     &imanager_i2c_adapters[SMB_PECI],
+				     attr[SMB_PECI]->did, SMBUS_FREQ_100KHZ);
 
-	ret = imanager_i2c_read_freq(&imgr->ec, I2COEM);
-	if (ret < 0)
-		dev_warn(dev, "Could not read SMBus frequency (%d)\n", ret);
-	else
-		dev_info(dev, "SMBus frequency: %d kHz\n", bus_frequency = ret);
+	platform_set_drvdata(pdev, data);
 
 	return 0;
 }
 
 static int imanager_i2c_remove(struct platform_device *pdev)
 {
-	struct imanager_i2c_data *data = dev_get_drvdata(&pdev->dev);
+	struct imanager_i2c_data *i2c = dev_get_drvdata(&pdev->dev);
+	int i;
 
-	i2c_del_adapter(&data->adapter);
-	i2c_set_adapdata(&data->adapter, NULL);
+	for (i = 0; i < i2c->nadap; i++) {
+		i2c_del_adapter(&i2c->adap_info[i].adapter);
+		i2c_set_adapdata(&i2c->adap_info[i].adapter, NULL);
+	}
 
 	return 0;
 }
 
 static struct platform_driver imanager_i2c_driver = {
 	.driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
 		.owner = THIS_MODULE,
 #endif
 		.name  = "imanager-smbus",
