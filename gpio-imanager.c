@@ -29,7 +29,7 @@ struct imanager_gpio_data {
 	struct gpio_chip chip;
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
 #undef gpiochip_get_data
 static inline struct imanager_gpio_data *
 to_imanager_gpio_data(struct gpio_chip *chip)
@@ -68,7 +68,7 @@ imanager_gpio_direction_out(struct gpio_chip *chip, uint offset, int val)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3,8,0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 8, 0)
 static int imanager_gpio_get_direction(struct gpio_chip *chip, uint offset)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
@@ -128,7 +128,7 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	chip = &gpio->chip;
 
 	chip->owner = THIS_MODULE;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
 	chip->dev = dev;
 #else
 	chip->parent = dev;
@@ -140,7 +140,7 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	chip->set = imanager_gpio_set;
 	chip->direction_input = imanager_gpio_direction_in;
 	chip->direction_output = imanager_gpio_direction_out;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3,8,0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 8, 0)
 	chip->get_direction = imanager_gpio_get_direction;
 #endif
 	if (!chip->ngpio) {
@@ -148,9 +148,9 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
 	ret = gpiochip_add(chip);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
 	ret = gpiochip_add_data(chip, gpio);
 #else
 	ret = devm_gpiochip_add_data(dev, chip, gpio);
@@ -165,11 +165,11 @@ static int imanager_gpio_probe(struct platform_device *pdev)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
 static int imanager_gpio_remove(struct platform_device *pdev)
 {
 	struct imanager_gpio_data *data = platform_get_drvdata(pdev);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
 	int err = gpiochip_remove(&data->chip);
 	if (err)
 		dev_err(&pdev->dev, "Error while removing gpio device\n");
@@ -182,13 +182,13 @@ static int imanager_gpio_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_gpio_driver = {
 	.driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
 		.owner = THIS_MODULE,
 #endif
 		.name	= "imanager-gpio",
 	},
 	.probe	= imanager_gpio_probe,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
 	.remove = imanager_gpio_remove,
 #endif
 };
