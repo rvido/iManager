@@ -95,21 +95,19 @@ struct fan_ctrl {
 
 /* Default Voltage Sensors */
 struct imanager_hwmon_adc {
-	bool valid;	/* if set, below values are valid */
-
-	int value;
-	int min;
-	int max;
-	int average;
-	int lowest;
-	int highest;
+	bool valid; /* if set, below values are valid */
+	unsigned int value;
+	unsigned int min;
+	unsigned int max;
+	unsigned int average;
+	unsigned int lowest;
+	unsigned int highest;
 };
 
 struct imanager_hwmon_smartfan {
-	bool valid;	/* if set, below values are valid */
-
-	int pwm;
-	int speed;
+	bool valid; /* if set, below values are valid */
+	unsigned int pwm;
+	unsigned int speed;
 	bool speed_min_alarm;
 	bool speed_max_alarm;
 	struct fan_dev_config cfg;
@@ -118,10 +116,9 @@ struct imanager_hwmon_smartfan {
 struct imanager_hwmon_data {
 	struct imanager_device_data	*imgr;
 	const struct attribute_group	*groups[3];
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	struct device			*hwmon_device;
 #endif
-	bool valid; /* if set, below values are valid */
 	unsigned long			samples;
 	unsigned long			last_updated;
 	struct imanager_hwmon_adc	adc[EC_MAX_ADC_NUM];
@@ -152,32 +149,32 @@ imanager_hwmon_write_fan_config(struct imanager_ec_data *ec, int num,
 	};
 	int err;
 
-	if (!fan->cfg.did)
-		return -ENODEV;
-
 	err = imanager_write(ec, EC_CMD_FAN_CTL_WR, &msg);
 	if (err < 0)
 		return err;
-
-	switch (err) {
-	case 0:
-		break;
-	case HWM_STATUS_UNDEFINED_ITEM:
-	case HWM_STATUS_UNDEFINED_DID:
-	case HWM_STATUS_UNDEFINED_HWPIN:
-		return -EFAULT;
-	default:
-		return -EIO;
+	else if (err) {
+		switch (err) {
+		case HWM_STATUS_UNDEFINED_ITEM:
+		case HWM_STATUS_UNDEFINED_DID:
+		case HWM_STATUS_UNDEFINED_HWPIN:
+			return -ENODEV;
+		default:
+			return -EINVAL;
+		}
 	}
 
 	return 0;
 }
 
+/**
+ * FAN max/min alert bits are stored as bit pairs in a 8-bit register.
+ * FAN0~2: 2:{max2, min2}, 1:{max1, min1}, 0:{max0, min0}
+ */
 #define TEST_BIT(var, bit) ((var) & (bit))
-#define FAN_ALERT_MIN_BIT(var, fnum) TEST_BIT(var, BIT(fnum << 1))
-#define FAN_ALERT_MAX_BIT(var, fnum) TEST_BIT(var, BIT((fnum << 1) + 1))
+#define IS_FAN_ALERT_MIN(var, fan_num) TEST_BIT(var, BIT(fan_num << 1))
+#define IS_FAN_ALERT_MAX(var, fan_num) TEST_BIT(var, BIT((fan_num << 1) + 1))
 
-static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int fnum,
+static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int num,
 					 struct imanager_hwmon_smartfan *fan)
 {
 	u8 alert_flags;
@@ -188,8 +185,8 @@ static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int fnum,
 	if (ret < 0)
 		return ret;
 
-	fan->speed_min_alarm = FAN_ALERT_MIN_BIT(alert_flags, fnum);
-	fan->speed_max_alarm = FAN_ALERT_MAX_BIT(alert_flags, fnum);
+	fan->speed_min_alarm = IS_FAN_ALERT_MIN(alert_flags, num);
+	fan->speed_max_alarm = IS_FAN_ALERT_MAX(alert_flags, num);
 
 	return 0;
 }
@@ -220,9 +217,6 @@ static int imanager_hwmon_read_adc(struct imanager_ec_data *ec, int num,
 	int ret;
 
 	adc->valid = false;
-
-	if (!attr->did)
-		return -ENODEV;
 
 	ret = imanager_read16(ec, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
@@ -289,8 +283,7 @@ imanager_hwmon_update_device(struct device *dev)
 
 	mutex_lock(&imgr->lock);
 
-	if (time_after(jiffies, data->last_updated + HZ + HZ / 2)
-	    || !data->valid) {
+	if (time_after(jiffies, data->last_updated + HZ + HZ / 2)) {
 		/* Measured voltages */
 		for (i = 0; i < hwmon->adc.num; i++)
 			imanager_hwmon_read_adc(ec, i, &data->adc[i]);
@@ -300,7 +293,6 @@ imanager_hwmon_update_device(struct device *dev)
 			imanager_hwmon_read_fan_ctrl(ec, i, &data->fan[i]);
 
 		data->last_updated = jiffies;
-		data->valid = true;
 	}
 
 	mutex_unlock(&imgr->lock);
@@ -392,11 +384,10 @@ show_in_average(struct device *dev, struct device_attribute *attr, char *buf)
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct imanager_hwmon_adc *adc = &data->adc[nr];
 
-	if (adc->average)
-		adc->average =
-			DIV_ROUND_CLOSEST(adc->average * data->samples +
-					  adc->value, ++data->samples);
-	else {
+	if (adc->average) {
+		adc->average = DIV_ROUND_CLOSEST(adc->average * data->samples +
+						 adc->value, ++data->samples);
+	} else {
 		adc->average = adc->value;
 		data->samples = 1;
 	}
@@ -411,9 +402,7 @@ show_in_lowest(struct device *dev, struct device_attribute *attr, char *buf)
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct imanager_hwmon_adc *adc = &data->adc[nr];
 
-	if (!adc->lowest)
-		adc->lowest = adc->highest = adc->value;
-	else if (adc->value < adc->lowest)
+	if (!adc->lowest || (adc->value < adc->lowest))
 		adc->lowest = adc->value;
 
 	return sprintf(buf, "%u\n", in_from_reg(adc->lowest));
@@ -426,9 +415,7 @@ show_in_highest(struct device *dev, struct device_attribute *attr, char *buf)
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct imanager_hwmon_adc *adc = &data->adc[nr];
 
-	if (!adc->highest)
-		adc->highest = adc->value;
-	else if (adc->value > adc->highest)
+	if (!adc->highest || (adc->value > adc->highest))
 		adc->highest = adc->value;
 
 	return sprintf(buf, "%u\n", in_from_reg(adc->highest));
@@ -450,6 +437,8 @@ store_in_reset_history(struct device *dev, struct device_attribute *attr,
 	if (reset) {
 		data->adc[nr].lowest = 0;
 		data->adc[nr].highest = 0;
+		data->adc[nr].average = 0;
+		data->samples = 0;
 	}
 
 	return count;
@@ -937,7 +926,7 @@ show_fan_label(struct device *dev, struct device_attribute *attr, char *buf)
 /*
  * Sysfs callback functions
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 static ssize_t
 show_name(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -1239,7 +1228,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	struct imanager_hwmon_data *data;
 	struct device *hwmon_dev;
 	int i, num_attr_groups = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	int err;
 #endif
 
@@ -1262,7 +1251,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	if (hwmon->fan.num)
 		data->groups[num_attr_groups++] = &imanager_group_fan;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	err = sysfs_create_groups(&dev->kobj, data->groups);
 	if (err < 0)
 		return err;
@@ -1282,7 +1271,7 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 static int imanager_hwmon_remove(struct platform_device *pdev)
 {
 	struct imanager_hwmon_data *data = dev_get_drvdata(&pdev->dev);
@@ -1296,13 +1285,13 @@ static int imanager_hwmon_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_hwmon_driver = {
 	.driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
 		.owner = THIS_MODULE,
 #endif
 		.name  = "imanager-hwmon",
 	},
 	.probe	= imanager_hwmon_probe,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.remove	= imanager_hwmon_remove,
 #endif
 };
