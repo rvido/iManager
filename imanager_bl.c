@@ -38,7 +38,7 @@ MODULE_PARM_DESC(unit, "Select backlight control unit [0, 1] (defaults to 0)");
 
 struct imanager_backlight_data {
 	struct imanager_device_data *imgr;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	struct backlight_device *bd;
 #endif
 };
@@ -136,7 +136,7 @@ static int imanager_bl_set_brightness(struct backlight_device *bd)
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
 static struct backlight_ops imanager_bl_ops = {
 #else
 static const struct backlight_ops imanager_bl_ops = {
@@ -154,16 +154,16 @@ static int imanager_bl_init(struct device *dev,
 	int ret;
 
 	memset(&props, 0, sizeof(props));
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,38)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 	props.type = BACKLIGHT_PLATFORM;
 #endif
 	props.max_brightness = BL_MAX_PWM;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3,12,0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 12, 0)
 	bd = devm_backlight_device_register(dev, "imanager-backlight", dev,
 					    data, &imanager_bl_ops, &props);
 #else
 	bd = backlight_device_register("imanager_backlight", dev, data,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
 				       &imanager_bl_ops);
 #else
 				       &imanager_bl_ops, &props);
@@ -171,14 +171,14 @@ static int imanager_bl_init(struct device *dev,
 #endif
 
 	if (IS_ERR(bd)) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 		data->bd = NULL;
 #endif
 		dev_err(dev, "Unable to register backlight device\n");
 		return PTR_ERR(bd);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	data->bd = bd;
 #endif
 	bd->props.brightness = imanager_bl_get_brightness(bd);
@@ -220,7 +220,7 @@ static int imanager_bl_probe(struct platform_device *pdev)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 static int imanager_bl_remove(struct platform_device *pdev)
 {
 	struct imanager_backlight_data *data = dev_get_drvdata(&pdev->dev);
@@ -233,13 +233,13 @@ static int imanager_bl_remove(struct platform_device *pdev)
 
 static struct platform_driver imanager_backlight_driver = {
 	.driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
 		.owner = THIS_MODULE,
 #endif
 		.name	= "imanager-backlight",
 	},
 	.probe	= imanager_bl_probe,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.remove = imanager_bl_remove,
 #endif
 };
