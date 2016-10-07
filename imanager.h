@@ -183,7 +183,7 @@ struct imanager_ec_data {
 struct imanager_device_data {
 	struct imanager_ec_data	ec;
 	struct device		*dev;
-	struct mutex		lock;
+	struct mutex		lock; /* generic mutex for imanager core */
 };
 
 enum ec_ram_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };
