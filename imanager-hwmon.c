@@ -150,9 +150,9 @@ imanager_hwmon_write_fan_config(struct imanager_ec_data *ec, int num,
 	int err;
 
 	err = imanager_write(ec, EC_CMD_FAN_CTL_WR, &msg);
-	if (err < 0)
+	if (err < 0) {
 		return err;
-	else if (err) {
+	} else if (err) {
 		switch (err) {
 		case HWM_STATUS_UNDEFINED_ITEM:
 		case HWM_STATUS_UNDEFINED_DID:
@@ -170,23 +170,22 @@ imanager_hwmon_write_fan_config(struct imanager_ec_data *ec, int num,
  * FAN max/min alert bits are stored as bit pairs in a 8-bit register.
  * FAN0~2: 2:{max2, min2}, 1:{max1, min1}, 0:{max0, min0}
  */
-#define TEST_BIT(var, bit) ((var) & (bit))
-#define IS_FAN_ALERT_MIN(var, fan_num) TEST_BIT(var, BIT(fan_num << 1))
-#define IS_FAN_ALERT_MAX(var, fan_num) TEST_BIT(var, BIT((fan_num << 1) + 1))
+#define IS_FAN_ALERT_MIN(fan_num, var) test_bit(BIT(fan_num << 1), var)
+#define IS_FAN_ALERT_MAX(fan_num, var) test_bit(BIT((fan_num << 1) + 1), var)
 
 static int imanager_hwmon_read_fan_alert(struct imanager_ec_data *ec, int num,
 					 struct imanager_hwmon_smartfan *fan)
 {
-	u8 alert_flags;
+	const ulong alert_flags = 0;
 	int ret;
 
 	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT,
-				&alert_flags, sizeof(alert_flags));
+				(u8 *)&alert_flags, sizeof(u8));
 	if (ret < 0)
 		return ret;
 
-	fan->speed_min_alarm = IS_FAN_ALERT_MIN(alert_flags, num);
-	fan->speed_max_alarm = IS_FAN_ALERT_MAX(alert_flags, num);
+	fan->speed_min_alarm = IS_FAN_ALERT_MIN(num, &alert_flags);
+	fan->speed_max_alarm = IS_FAN_ALERT_MAX(num, &alert_flags);
 
 	return 0;
 }
@@ -771,9 +770,8 @@ show_temp_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 	return sprintf(buf, "%u\n", is_alarm);
 }
 
-static ssize_t
-store_temp_min(struct device *dev, struct device_attribute *attr,
-		const char *buf, size_t count)
+static ssize_t store_temp_min(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t count)
 {
 	struct imanager_hwmon_data *data = imanager_hwmon_update_device(dev);
 	struct imanager_device_data *imgr = data->imgr;
