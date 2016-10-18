@@ -221,7 +221,7 @@ static int imanager_hwmon_read_adc(struct imanager_ec_data *ec, int num,
 	if (ret < 0)
 		return ret;
 
-	adc->value = ret * attr->devtbl->scale;
+	adc->value = ret * attr->ecdev->scale;
 	adc->valid = true;
 
 	return 0;

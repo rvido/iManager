@@ -38,19 +38,16 @@ static const char * const chip_names[] = {
 	NULL
 };
 
-#define IMANAGER_EC_DEVICE(device_id, device_type, scaling_factor) \
-	.did = (device_id), .type = (device_type), .scale = (scaling_factor)
-
-static const struct imanager_device_table_entry devtbl[] = {
+static const struct imanager_ec_device ecdev_table[] = {
 	/* GPIO */
-	{ IMANAGER_EC_DEVICE(ALTGPIO0, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO1, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO2, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO3, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO4, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO5, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO6, GPIO, -1) },
-	{ IMANAGER_EC_DEVICE(ALTGPIO7, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO0, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO1, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO2, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO3, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO4, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO5, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO6, GPIO, -1) },
+	{ IMANAGER_EC_DEVICE(GPIO7, GPIO, -1) },
 	/* FAN */
 	{ IMANAGER_EC_DEVICE(CPUFAN_2P,  PWM, 2) },
 	{ IMANAGER_EC_DEVICE(CPUFAN_4P,  PWM, 4) },
@@ -212,17 +209,17 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 	struct imanager_backlight_device *bl = &ec->bl;
 	struct imanager_watchdog_device *wdt = &ec->wdt;
 
-	switch (attr->devtbl->type) {
+	switch (attr->ecdev->type) {
 	case GPIO:
 		switch (attr->did) {
-		case ALTGPIO0:
-		case ALTGPIO1:
-		case ALTGPIO2:
-		case ALTGPIO3:
-		case ALTGPIO4:
-		case ALTGPIO5:
-		case ALTGPIO6:
-		case ALTGPIO7:
+		case GPIO0:
+		case GPIO1:
+		case GPIO2:
+		case GPIO3:
+		case GPIO4:
+		case GPIO5:
+		case GPIO6:
+		case GPIO7:
 			gpio->attr[gpio->num++] = attr;
 			break;
 		case WDNMI:
@@ -352,12 +349,12 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 	/* Generate iManager device atributes */
 	for (i = 0; i < EC_MAX_DID && msgs[DEVID].u.data[i]; i++) {
 		attr = &ec->attr[i];
-		for (j = 0; j < ARRAY_SIZE(devtbl); j++) {
-			if (devtbl[j].did == msgs[DEVID].u.data[i]) {
+		for (j = 0; j < ARRAY_SIZE(ecdev_table); j++) {
+			if (ecdev_table[j].did == msgs[DEVID].u.data[i]) {
 				attr->did = msgs[DEVID].u.data[i];
 				attr->hwp = msgs[HWPIN].u.data[i];
 				attr->pol = msgs[POLARITY].u.data[i];
-				attr->devtbl = &devtbl[j];
+				attr->ecdev = &ecdev_table[j];
 				imanager_add_attribute(ec, attr);
 				break;
 			}

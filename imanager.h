@@ -16,6 +16,16 @@
 #include <linux/mutex.h>
 #include "imanager-ec.h"
 
+/**
+ * IMANAGER_MSG_SIMPLE - macro used to describe a simple iManager message
+ * @read_len:	the message read length
+ * @write_len:	the message write length
+ * @parameter:	the message parameter
+ * @_data:	pointer to data field
+ *
+ * This macro is used to create a struct imanager_ec_message used for basic
+ * EC communication
+ */
 #define IMANAGER_MSG_SIMPLE(read_len, write_len, parameter, _data) \
 	.rlen = (read_len), .wlen = (write_len), \
 	.param = (parameter), .data = (_data)
@@ -26,7 +36,7 @@
  * @wlen:	iManager message write length
  * @param:	iManager message parameter (offset, id, or unit number)
  * @u:		union holding struct imanager_ec_smb_message and data field
- * @data:	pointer to data field - source or target
+ * @data:	pointer to data field
  */
 struct imanager_ec_message {
 	unsigned int rlen;
@@ -45,13 +55,13 @@ struct imanager_ec_message {
  * @did:	iManager Device ID
  * @hwp:	iManager Hardware Pin number
  * @pol:	iManager Device Polarity
- * @devtbl:	pointer to iManager device table entry
+ * @ecdev:	pointer to iManager device table entry
  */
 struct imanager_device_attribute {
 	unsigned int did;
 	unsigned int hwp;
 	unsigned int pol;
-	const struct imanager_device_table_entry *devtbl;
+	const struct imanager_ec_device *ecdev;
 };
 
 /**
@@ -182,8 +192,8 @@ struct imanager_ec_data {
  */
 struct imanager_device_data {
 	struct imanager_ec_data	ec;
-	struct device		*dev;
-	struct mutex		lock; /* generic mutex for imanager core */
+	struct device	*dev;
+	struct mutex	lock; /* generic mutex for imanager core */
 };
 
 enum ec_ram_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };

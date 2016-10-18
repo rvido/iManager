@@ -126,56 +126,56 @@
 
 enum imanager_smb_cells { SMB_EEP = 0, I2C_OEM, SMB_1, SMB_PECI };
 
-enum imanager_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB, TACH };
+enum imanager_device_type { ADC = 1, DAC, GPIO, IRQ, PWM, SMB };
 
 enum imanager_device_id {
 	/* GPIO */
-	ALTGPIO0 = 0x10, ALTGPIO1, ALTGPIO2, ALTGPIO3, ALTGPIO4, ALTGPIO5,
-	ALTGPIO6, ALTGPIO7,
+	GPIO0 = 0x10, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO6, GPIO7,
 	/* FAN */
-	CPUFAN_2P = 0x20, CPUFAN_4P, SYSFAN1_2P, SYSFAN1_4P,
-	SYSFAN2_2P, SYSFAN2_4P,
+	CPUFAN_2P = 0x20, CPUFAN_4P, SYSFAN1_2P, SYSFAN1_4P, SYSFAN2_2P,
+	SYSFAN2_4P,
 	/* Brightness Control */
-	BRIGHTNESS = 0x26,
+	BRIGHTNESS = 0x26, BRIGHTNESS2 = 0x88,
 	/* SMBus */
 	SMBOEM0	 = 0x28, SMBOEM1, SMBOEM2, SMBEEPROM,
 	SMBTHM0  = 0x2C, SMBTHM1, SMBSECEEP, I2COEM,
-	SMBEEP2K = 0x38, OEMEEP, OEMEEP2K, SMBPECI, SMBOEM3, SMLINK, SMBSLV,
-	/* LED */
-	POWERLED = 0x40, BATLEDG, OEMLED0, OEMLED1, OEMLED2, BATLEDR,
+	SMBEEP2K = 0x38, OEMEEP, OEMEEP2K, SMBPECI,
 	/* ADC */
-	CMOSBAT  = 0x50, CMOSBAT_2, CMOSBAT_10, LIBAT, LIBAT_2, LIBAT_10,
+	CMOSBAT  = 0x50, CMOSBAT_2, CMOSBAT_10,
 	ADC5VS0  = 0x56, ADC5VS0_2, ADC5VS0_10,
 	ADC5VS5  = 0x59, ADC5VS5_2, ADC5VS5_10,
 	ADC33VS0 = 0x5C, ADC33VS0_2, ADC33VS0_10,
 	ADC33VS5 = 0x5F, ADC33VS5_2, ADC33VS5_10,
 	ADC12VS0 = 0x62, ADC12VS0_2, ADC12VS0_10,
 	VCOREA   = 0x65, VCOREA_2, VCOREA_10,
-	VCOREB   = 0x68, VCOREB_2, VCOREB_10,
-	ADCDC    = 0x6B, ADCDC_2, ADCDC_10,
-	VSTBY    = 0x6E, VSTBY_2, VSTBY_10,
-	VAUX     = 0x71, VAUX_2, VAUX_10,
 	CURRENT  = 0x74,
 	/* Watchdog */
 	WDIRQ    = 0x78, WDNMI,
-	/* FAN Tacho */
-	TACHO0   = 0x80, TACHO1, TACHO2,
-	/* Brightness/Backlight Control */
-	BRIGHTNESS2 = 0x88,
-	BACKLIGHT1, BACKLIGHT2
 };
 
 /**
- * struct imanager_device_table_row - Describes iManager EC Device
+ * struct imanager_ec_device - Describes iManager EC Device
  * @did:	iManager Device ID
  * @type:	iManager Device Type
  * @scale:	Scaling factor
  */
-struct imanager_device_table_entry {
+struct imanager_ec_device {
 	unsigned int did;
 	unsigned int type;
 	unsigned int scale;
 };
+
+/**
+ * IMANAGER_EC_DEVICE - macro used to describe a specific iManager device
+ * @device_id:		the 8 bit iManager device ID
+ * @device_type:	the iManager device type
+ * @scaling_factor:	the iManager sensor device scaling factor
+ *
+ * This macro is used to create a struct imanager_ec_device that matches a
+ * specific iManager device
+ */
+#define IMANAGER_EC_DEVICE(device_id, device_type, scaling_factor) \
+	.did = (device_id), .type = (device_type), .scale = (scaling_factor)
 
 /**
  * struct imanager_io_ops - iManager I/O operation structure
