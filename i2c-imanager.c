@@ -25,8 +25,6 @@
 #define I2C_SMBUS_BLOCK_SIZE	32UL
 #define I2C_MAX_READ_SIZE	I2C_SMBUS_BLOCK_SIZE
 #define I2C_MAX_WRITE_SIZE	(I2C_SMBUS_BLOCK_SIZE - 1)
-#define CHECK_RD_SIZE(x)	((x && (x <= I2C_MAX_READ_SIZE)) ? x : \
-				I2C_MAX_READ_SIZE)
 
 #define EC_HWRAM_OFFSET_STATUS	0UL
 
@@ -36,20 +34,15 @@
 #define I2C_ERR_UNKNOWN		0x13UL
 #define I2C_ERR_ADDR_NACK	0x10UL
 
-#define EC_I2C_XFER_COMPLETE	0UL
-
-#define U16_LO(x)		((x) & 0xff)
-#define U16_HI(x)		U16_LO((x) >> 8)
-
 #define SMBUS_FREQ_50KHZ	0x0100
 #define SMBUS_FREQ_100KHZ	0x0200
 #define SMBUS_FREQ_400KHZ	0x0300
 
 #define imanager_i2c_wr_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_WR, message)
+	imanager_i2c_block_wr_rw_combined(ec, message, EC_CMD_I2C_WR)
 
 #define imanager_i2c_rw_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, EC_CMD_I2C_RW, message)
+	imanager_i2c_block_wr_rw_combined(ec, message, EC_CMD_I2C_RW)
 
 struct ec_i2c_status {
 	u32 error	: 7;
@@ -108,18 +101,18 @@ static int imanager_i2c_wait_proc_complete(struct imanager_ec_data *ec)
 		if (ret < 0)
 			return ret;
 
-		if (val == EC_I2C_XFER_COMPLETE)
+		if (!val)
 			return 0;
 
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
 	}
 
-	return -EIO;
+	return -ETIME;
 }
 
 static int imanager_i2c_block_wr_rw_combined(struct imanager_ec_data *ec,
-					     unsigned int protocol,
-					     struct imanager_ec_message *msg)
+					     struct imanager_ec_message *msg,
+					     unsigned int protocol)
 {
 	int ret;
 
@@ -149,13 +142,16 @@ imanager_i2c_write_freq(struct imanager_ec_data *ec, int did, int freq)
 	return imanager_write16(ec, EC_CMD_SMB_FREQ_WR, did, freq);
 }
 
-static int imanager_i2c_read_block(struct imanager_ec_data *ec,
-				   struct imanager_ec_message *msg, u8 *buf)
+static inline int eval_read_len(int len)
+{
+	return len && len <= I2C_MAX_READ_SIZE ? len : I2C_MAX_READ_SIZE;
+}
+
+static inline int
+imanager_i2c_read_block(struct imanager_ec_data *ec,
+			struct imanager_ec_message *msg, u8 *buf)
 {
 	int ret;
-
-	if (!buf[0] || (buf[0] > I2C_MAX_READ_SIZE))
-		return -EINVAL;
 
 	ret = imanager_i2c_wr_combined(ec, msg);
 	if (ret < 0)
@@ -167,8 +163,9 @@ static int imanager_i2c_read_block(struct imanager_ec_data *ec,
 	return 0;
 }
 
-static int imanager_i2c_write_block(struct imanager_ec_data *ec,
-				    struct imanager_ec_message *msg, u8 *buf)
+static inline int
+imanager_i2c_write_block(struct imanager_ec_data *ec,
+			 struct imanager_ec_message *msg, u8 *buf)
 {
 	if (!buf[0] || (buf[0] > I2C_MAX_WRITE_SIZE))
 		return -EINVAL;
@@ -187,7 +184,7 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 	struct imanager_ec_data *ec = &imgr->ec;
 	struct device *dev = data->dev;
 	int smb_devid = *(int *)adap->algo_data;
-	int val, len, ret = 0;
+	int val, ret = 0;
 	u16 addr16 = addr << 1; /* convert to 8-bit i2c slave address */
 	u8 *buf = smb_data->block;
 	struct imanager_ec_message msg = {
@@ -196,8 +193,8 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 		.param = smb_devid,
 		.u = {
 			.smb.hdr = {
-				.addr_low  = U16_LO(addr16),
-				.addr_high = U16_HI(addr16),
+				.addr_low  = addr16 & 0x00ff,
+				.addr_high = addr16 >> 8,
 				.rlen = 0,
 				.wlen = 0,
 			},
@@ -274,8 +271,8 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.rlen = 0;
 			smb->hdr.wlen = 3;
 			smb->hdr.cmd = command;
-			smb->data[0] = U16_LO(smb_data->word);
-			smb->data[1] = U16_HI(smb_data->word);
+			smb->data[0] = smb_data->word & 0x00ff;
+			smb->data[1] = smb_data->word >> 8;
 			val = imanager_i2c_wr_combined(ec, &msg);
 		} else {
 			msg.rlen = 2;
@@ -302,18 +299,11 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.cmd = command;
 			ret = imanager_i2c_write_block(ec, &msg, buf);
 		} else {
-			len = CHECK_RD_SIZE(buf[0]);
-			msg.rlen = len;
-			smb->hdr.rlen = len;
+			msg.rlen = eval_read_len(buf[0]);
+			smb->hdr.rlen = msg.rlen;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			/* If buf[0] == 0 EC will read I2C_MAX_READ_SIZE */
-			ret = imanager_i2c_wr_combined(ec, &msg);
-			if (ret >= 0) {
-				buf[0] = ret;
-				memcpy(&buf[1], msg.u.data, ret);
-				ret = 0;
-			}
+			ret = imanager_i2c_read_block(ec, &msg, buf);
 		}
 		break;
 	case I2C_SMBUS_I2C_BLOCK_DATA:
@@ -329,9 +319,8 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.cmd = command;
 			ret = imanager_i2c_write_block(ec, &msg, buf);
 		} else {
-			len = CHECK_RD_SIZE(buf[0]);
-			msg.rlen = len;
-			smb->hdr.rlen = len;
+			msg.rlen = eval_read_len(buf[0]);
+			smb->hdr.rlen = msg.rlen;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
 			ret = imanager_i2c_read_block(ec, &msg, buf);
