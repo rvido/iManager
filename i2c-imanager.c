@@ -64,30 +64,23 @@ struct imanager_i2c_data {
 static int imanager_i2c_eval_status(u8 status)
 {
 	struct ec_i2c_status *_status = (struct ec_i2c_status *)&status;
-	int ret = 0;
 
 	switch (_status->error) {
 	case 0:
-		break;
+		return 0;
 	case I2C_ERR_ADDR_NACK:
-		ret = -ENODEV;
-		break;
+		return -ENXIO;
 	case I2C_ERR_ACCESS:
+		return -EACCES;
 	case I2C_ERR_UNKNOWN:
-		ret = -EAGAIN;
-		break;
+		return -EAGAIN;
 	case I2C_ERR_TIMEOUT:
-		ret = -ETIME;
-		break;
+		return -ETIME;
 	case I2C_ERR_PROTO:
-		ret = -EPROTO;
-		break;
-	default:
-		ret = -EIO;
-		break;
+		return -EPROTO;
 	}
 
-	return ret;
+	return -EIO;
 }
 
 static int imanager_i2c_wait_proc_complete(struct imanager_ec_data *ec)
