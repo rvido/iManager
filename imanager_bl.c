@@ -29,11 +29,11 @@
 enum backlight_units { BL_UNIT_1 = 0, BL_UNIT_2 };
 
 static bool polarity = PWM_POLARITY_NORMAL;
-module_param(polarity, bool, 0);
+module_param(polarity, bool, 0444);
 MODULE_PARM_DESC(polarity, "Select backlight polarity (inverted := 1)");
 
 static ushort unit = BL_UNIT_1;
-module_param(unit, ushort, 0);
+module_param(unit, ushort, 0444);
 MODULE_PARM_DESC(unit, "Select backlight control unit [0, 1] (defaults to 0)");
 
 struct imanager_backlight_data {
