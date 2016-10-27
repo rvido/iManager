@@ -104,7 +104,7 @@
 #define EC_F_HWMON_MSG			BIT(9)
 
 /* iManager offsets */
-#define EC_MSG_OFFSET(N)		(0UL + N)
+#define EC_MSG_OFFSET(N)		(0UL + (N))
 #define EC_MSG_OFFSET_CMD		EC_MSG_OFFSET(0)
 #define EC_MSG_OFFSET_STATUS		EC_MSG_OFFSET(1)
 #define EC_MSG_OFFSET_PARAM		EC_MSG_OFFSET(2)
@@ -117,12 +117,12 @@
 #define EC_CMD_OFFSET_READ		0xA0UL
 #define EC_CMD_OFFSET_WRITE		0x50UL
 
-#define EC_KERNEL_MINOR(x)		(x & 0xff)
+#define EC_KERNEL_MINOR(x)		((x) & 0xff)
 #define EC_KERNEL_MAJOR(x)		({ typeof(x) __x = (x >> 8); \
 					((__x >> 4) * 10 + (__x & 0x0f)); })
 #define EC_FIRMWARE_MINOR(x)		EC_KERNEL_MINOR(x)
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
-#define EC_PROJECT_CODE(x)		((char)(x & 0xff))
+#define EC_PROJECT_CODE(x)		EC_KERNEL_MINOR(x)
 
 enum imanager_smb_cells { SMB_EEP = 0, I2C_OEM, SMB_1, SMB_PECI };
 
