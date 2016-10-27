@@ -377,11 +377,11 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 	return 0;
 }
 
-const char *project_code_to_str(char code)
+const char *project_code_to_str(unsigned int code)
 {
 	const char *str;
 
-	switch (code) {
+	switch ((char)code) {
 	case 'V':
 		str = "release";
 		break;
@@ -429,9 +429,9 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 	info->type = project_code_to_str(EC_PROJECT_CODE(val));
 
 	/*
-	 * In some FW releases, the PCB name string is not Null-terminated so
-	 * we need to read a fixed amount of chars. Then, the name length may
-	 * vary by one char (SOM6867 vs. SOM-6867).
+	 * The PCB name string, in some FW releases, is not Null-terminated,
+	 * so we need to read a fixed amount of chars. Also, the name length
+	 * may vary by one char (SOM6867 vs. SOM-6867).
 	 */
 	ret = imanager_read(ec, EC_CMD_FW_INFO_RD, &msg);
 	if (ret)
@@ -832,11 +832,11 @@ imanager_chip_show(struct device *dev, struct device_attribute *attr, char *buf)
 	return scnprintf(buf, PAGE_SIZE, "%s\n", data->ec.chip_name);
 }
 
-static DEVICE_ATTR(imanager_board, S_IRUGO, imanager_board_show, NULL);
-static DEVICE_ATTR(imanager_kernel, S_IRUGO, imanager_kernel_show, NULL);
-static DEVICE_ATTR(imanager_firmware, S_IRUGO, imanager_firmware_show, NULL);
-static DEVICE_ATTR(imanager_type, S_IRUGO, imanager_type_show, NULL);
-static DEVICE_ATTR(imanager_chip, S_IRUGO, imanager_chip_show, NULL);
+static DEVICE_ATTR(imanager_board, 0444, imanager_board_show, NULL);
+static DEVICE_ATTR(imanager_kernel, 0444, imanager_kernel_show, NULL);
+static DEVICE_ATTR(imanager_firmware, 0444, imanager_firmware_show, NULL);
+static DEVICE_ATTR(imanager_type, 0444, imanager_type_show, NULL);
+static DEVICE_ATTR(imanager_chip, 0444, imanager_chip_show, NULL);
 
 static struct attribute *imanager_attributes[] = {
 	&dev_attr_imanager_board.attr,
