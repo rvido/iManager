@@ -34,14 +34,14 @@ struct imanager_wdt_data {
 };
 
 static uint timeout = WDT_DEFAULT_TIMEOUT;
-module_param(timeout, uint, 0);
+module_param(timeout, uint, 0444);
 MODULE_PARM_DESC(timeout,
 		 "Watchdog timeout in seconds. 1 <= timeout <= 65534, default="
 		 __MODULE_STRING(WDT_DEFAULT_TIMEOUT) ".");
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 3, 0)
 static bool nowayout = WATCHDOG_NOWAYOUT;
-module_param(nowayout, bool, 0);
+module_param(nowayout, bool, 0444);
 MODULE_PARM_DESC(nowayout,
 		 "Watchdog cannot be stopped once started (default="
 		 __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
