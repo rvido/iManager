@@ -379,24 +379,18 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 
 const char *project_code_to_str(unsigned int code)
 {
-	const char *str;
-
 	switch ((char)code) {
 	case 'V':
-		str = "release";
-		break;
+		return "release";
 	case 'X':
-		str = "debug";
-		break;
+		return "debug";
 	case 'A' ... 'U':
-		str = "custom";
-		break;
-	default:
-		str = "unknown";
-		break;
+	case 'Y':
+	case 'Z':
+		return "custom";
 	}
 
-	return str;
+	return "unspecified";
 }
 
 static int imanager_read_firmware_version(struct imanager_ec_data *ec)
