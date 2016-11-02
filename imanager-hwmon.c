@@ -1083,9 +1083,8 @@ static struct attribute *imanager_other_attributes[] = {
 	NULL
 };
 
-static umode_t
-imanager_other_is_visible(struct kobject *kobj,
-			  struct attribute *attr, int index)
+static umode_t imanager_other_is_visible(struct kobject *kobj,
+					 struct attribute *attr, int index)
 {
 	struct device *dev = to_dev(kobj);
 	struct imanager_hwmon_data *data = dev_get_drvdata(dev);
