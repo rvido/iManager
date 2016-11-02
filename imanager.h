@@ -16,6 +16,9 @@
 #include <linux/mutex.h>
 #include "imanager-ec.h"
 
+#define IMANAGER_PCB_NAME_LEN	9
+#define IMANAGER_VERSION_LEN	40
+
 /**
  * IMANAGER_MSG_SIMPLE - macro used to describe a simple iManager message
  * @read_len:	the message read length
@@ -150,6 +153,7 @@ struct imanager_watchdog_device {
  * @firmware_minor:	iManager EC firmware minor revision
  * @type:		iManager type - release/debug/custom
  * @pcb_name:		PC board name
+ * @version:		iManager version string
  */
 struct imanager_info {
 	unsigned int kernel_major;
@@ -157,7 +161,7 @@ struct imanager_info {
 	unsigned int firmware_major;
 	unsigned int firmware_minor;
 	const char *type;
-	char pcb_name[EC_MAX_LABEL_SIZE];
+	char version[IMANAGER_VERSION_LEN];
 };
 
 /**

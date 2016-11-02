@@ -42,13 +42,11 @@
 #define EC_MAX_SMB_NUM			4UL
 #define EC_MAX_WDT_NUM			2UL
 
-#define PCB_NAME_SIZE			8UL
 #define EC_PAYLOAD_SIZE			40UL
 #define EC_MSG_SIZE			sizeof(struct imanager_ec_smb_message)
 #define EC_MSG_HDR_SIZE			sizeof(struct imanager_ec_smb_msg_hdr)
 
 #define EC_MAX_DID			32UL
-#define EC_MAX_LABEL_SIZE		16UL
 
 /*
  * iManager commands

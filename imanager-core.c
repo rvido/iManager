@@ -377,7 +377,7 @@ static int imanager_read_device_config(struct imanager_ec_data *ec)
 	return 0;
 }
 
-const char *project_code_to_str(unsigned int code)
+static const char *project_code_to_str(unsigned int code)
 {
 	switch ((char)code) {
 	case 'V':
@@ -395,12 +395,13 @@ const char *project_code_to_str(unsigned int code)
 
 static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 {
+	char pcb_name[IMANAGER_PCB_NAME_LEN] = { 0 };
 	struct imanager_info *info = &ec->info;
 	struct imanager_ec_message msg = {
-		.rlen = ARRAY_SIZE(info->pcb_name) - 1,
+		.rlen = ARRAY_SIZE(pcb_name) - 1,
 		.wlen = 0,
 		.param = 0,
-		.data = info->pcb_name,
+		.data = pcb_name,
 	};
 	struct imanager_ec_version ver;
 	unsigned int val;
@@ -431,12 +432,13 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 	if (ret)
 		return ret;
 
-	if (!strchr(info->pcb_name, '-'))
-		info->pcb_name[PCB_NAME_SIZE - 1] = '\0';
-	else
-		info->pcb_name[PCB_NAME_SIZE] = '\0';
+	if (!strchr(pcb_name, '-'))
+		pcb_name[IMANAGER_PCB_NAME_LEN - 2] = '\0';
 
-	return 0;
+	return scnprintf(info->version, sizeof(info->version),
+			 "%s_k%d.%d_f%d.%d_%s", pcb_name, info->kernel_major,
+			 info->kernel_minor, info->firmware_major,
+			 info->firmware_minor, info->type);
 }
 
 static int imanager_ec_init(struct imanager_ec_data *ec)
@@ -448,7 +450,7 @@ static int imanager_ec_init(struct imanager_ec_data *ec)
 	inb(IT8518_DAT_PORT);
 
 	ret = imanager_read_firmware_version(ec);
-	if (ret)
+	if (ret < 0)
 		return ret;
 
 	return imanager_read_device_config(ec);
@@ -779,64 +781,28 @@ static struct resource imanager_ioresource = {
 	.flags  = IORESOURCE_IO,
 };
 
-static ssize_t
-imanager_board_show(struct device *dev, struct device_attribute *attr,
-		    char *buf)
+static ssize_t imanager_version_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
 	struct imanager_info *info = &data->ec.info;
 
-	return scnprintf(buf, PAGE_SIZE, "%s\n", info->pcb_name);
+	return scnprintf(buf, PAGE_SIZE, "%s\n", info->version);
 }
 
-static ssize_t imanager_kernel_show(struct device *dev,
-				    struct device_attribute *attr, char *buf)
-{
-	struct imanager_device_data *data = dev_get_drvdata(dev);
-	struct imanager_info *info = &data->ec.info;
-
-	return scnprintf(buf, PAGE_SIZE, "%d.%d\n", info->kernel_major,
-			 info->kernel_minor);
-}
-
-static ssize_t imanager_firmware_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
-{
-	struct imanager_device_data *data = dev_get_drvdata(dev);
-	struct imanager_info *info = &data->ec.info;
-
-	return scnprintf(buf, PAGE_SIZE, "%d.%d\n", info->firmware_major,
-			 info->firmware_minor);
-}
-
-static ssize_t
-imanager_type_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct imanager_device_data *data = dev_get_drvdata(dev);
-	struct imanager_info *info = &data->ec.info;
-
-	return scnprintf(buf, PAGE_SIZE, "%s\n", info->type);
-}
-
-static ssize_t
-imanager_chip_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t imanager_chip_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
 {
 	struct imanager_device_data *data = dev_get_drvdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%s\n", data->ec.chip_name);
 }
 
-static DEVICE_ATTR(imanager_board, 0444, imanager_board_show, NULL);
-static DEVICE_ATTR(imanager_kernel, 0444, imanager_kernel_show, NULL);
-static DEVICE_ATTR(imanager_firmware, 0444, imanager_firmware_show, NULL);
-static DEVICE_ATTR(imanager_type, 0444, imanager_type_show, NULL);
+static DEVICE_ATTR(imanager_version, 0444, imanager_version_show, NULL);
 static DEVICE_ATTR(imanager_chip, 0444, imanager_chip_show, NULL);
 
 static struct attribute *imanager_attributes[] = {
-	&dev_attr_imanager_board.attr,
-	&dev_attr_imanager_kernel.attr,
-	&dev_attr_imanager_firmware.attr,
-	&dev_attr_imanager_type.attr,
+	&dev_attr_imanager_version.attr,
 	&dev_attr_imanager_chip.attr,
 	NULL
 };
@@ -900,10 +866,8 @@ static int imanager_detect_device(struct imanager_device_data *imgr)
 		return ret;
 	}
 
-	dev_info(dev, "Found Advantech iManager %s - %s %d.%d/%d.%d (%s)\n",
-		 ec->chip_name, info->pcb_name,
-		 info->kernel_major, info->kernel_minor,
-		 info->firmware_major, info->firmware_minor, info->type);
+	dev_info(dev, "Found Advantech iManager %s: %s (%s)\n",
+		 ec->chip_name, info->version, info->type);
 
 	ret = sysfs_create_group(&dev->kobj, &imanager_attr_group);
 	if (ret)
