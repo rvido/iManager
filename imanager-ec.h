@@ -19,7 +19,7 @@
 #define EC_DELAY_MIN			200UL
 #define EC_DELAY_MAX			250UL
 
-#define EC_MAX_RETRY			400UL
+#define EC_MAX_RETRIES			400UL
 
 #define CHIP_ID_IT8518			0x8518
 #define CHIP_ID_IT8528			0x8528
@@ -41,12 +41,11 @@
 #define EC_MAX_BLC_NUM			2UL
 #define EC_MAX_SMB_NUM			4UL
 #define EC_MAX_WDT_NUM			2UL
+#define EC_MAX_DID			32UL
 
 #define EC_PAYLOAD_SIZE			40UL
 #define EC_MSG_SIZE			sizeof(struct imanager_ec_smb_message)
 #define EC_MSG_HDR_SIZE			sizeof(struct imanager_ec_smb_msg_hdr)
-
-#define EC_MAX_DID			32UL
 
 /*
  * iManager commands
@@ -65,7 +64,7 @@
 #define EC_CMD_FAN_CTL_RD		0x40UL
 #define EC_CMD_FAN_CTL_WR		0x41UL
 #define EC_CMD_THZ_RD			0x42UL
-#define EC_CMD_DEV_TBL_RD		0x20UL
+#define EC_CMD_DEVTBL_RD		0x20UL
 #define EC_CMD_FW_INFO_RD		0xF0UL
 #define EC_CMD_BUF_CLR			0xC0UL
 #define EC_CMD_BUF_RD			0xC1UL
@@ -86,14 +85,7 @@
 #define EC_OFFSET_BACKLIGHT_CTRL	0x99UL
 #define EC_OFFSET_FW_RELEASE		0xF8UL
 
-/* iManager flags */
-#define IMANAGER_FEATURE_BACKLIGHT	BIT(0)
-#define IMANAGER_FEATURE_GPIO		BIT(1)
-#define IMANAGER_FEATURE_HWMON_ADC	BIT(2)
-#define IMANAGER_FEATURE_HWMON_FAN	BIT(3)
-#define IMANAGER_FEATURE_SMBUS		BIT(4)
-#define IMANAGER_FEATURE_WDT		BIT(5)
-
+/* iManager EC flags */
 #define EC_IO28_OUTBUF			BIT(0)
 #define EC_IO28_INBUF			BIT(1)
 
@@ -101,7 +93,9 @@
 #define EC_F_CMD_COMPLETE		BIT(7)
 #define EC_F_HWMON_MSG			BIT(9)
 
-/* iManager offsets */
+#define EC_I2C_STATUS_MASK		0x7E
+
+/* iManager message offsets */
 #define EC_MSG_OFFSET(N)		(0UL + (N))
 #define EC_MSG_OFFSET_CMD		EC_MSG_OFFSET(0)
 #define EC_MSG_OFFSET_STATUS		EC_MSG_OFFSET(1)

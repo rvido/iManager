@@ -28,6 +28,14 @@
 #include "imanager.h"
 #include "imanager-ec.h"
 
+/* iManager flags */
+#define IMANAGER_FEATURE_BACKLIGHT	BIT(0)
+#define IMANAGER_FEATURE_GPIO		BIT(1)
+#define IMANAGER_FEATURE_HWMON_ADC	BIT(2)
+#define IMANAGER_FEATURE_HWMON_FAN	BIT(3)
+#define IMANAGER_FEATURE_SMBUS		BIT(4)
+#define IMANAGER_FEATURE_WDT		BIT(5)
+
 enum kinds { IT8518, IT8528 };
 
 static struct platform_device *imanager_pdev;
@@ -84,7 +92,7 @@ static const struct imanager_ec_device ecdev_table[] = {
 	/* Watchdog */
 	{ IMANAGER_EC_DEVICE(WDIRQ, IRQ,  -1) },
 	{ IMANAGER_EC_DEVICE(WDNMI, GPIO, -1) },
-	{ 0 }
+	{ }
 };
 
 /**
@@ -97,14 +105,14 @@ enum imanager_io_buffer_status { IS_CLEARED = 0, IS_SET };
 
 static inline int check_io28_ready(uint bit, uint state)
 {
-	int ret, i = 0;
+	int ret, retries = EC_MAX_RETRIES;
 
 	do {
 		ret = inb(IT8528_CMD_PORT);
 		if (CHECK_BIT(ret, bit) == state)
 			return 0;
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	} while (i++ < EC_MAX_RETRY);
+	} while (retries--);
 
 	return -ETIME;
 }
@@ -160,37 +168,37 @@ static inline int ec_io28_outb(int addr, int reg, int val)
 	return 0;
 }
 
-static inline int ec_io18_read(int cmd)
+static int ec_io18_read(int cmd)
 {
 	return ec_inb(IT8518_CMD_PORT, cmd);
 }
 
-static inline int ec_io18_write(int cmd, int value)
+static int ec_io18_write(int cmd, int value)
 {
 	ec_outb(IT8518_CMD_PORT, cmd, value);
 
 	return 0;
 }
 
-static inline int ec_io28_read(int cmd)
+static int ec_io28_read(int cmd)
 {
 	return ec_io28_inb(IT8528_CMD_PORT, cmd + EC_CMD_OFFSET_READ);
 }
 
-static inline int ec_io28_write(int cmd, int value)
+static int ec_io28_write(int cmd, int value)
 {
 	return ec_io28_outb(IT8528_CMD_PORT, cmd + EC_CMD_OFFSET_WRITE, value);
 }
 
 static int imanager_check_ec_ready(struct imanager_io_ops *io)
 {
-	int i = 0;
+	int retries = EC_MAX_RETRIES;
 
 	do {
 		if (!io->read(EC_CMD_CHK_RDY))
 			return 0;
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	} while (i++ < EC_MAX_RETRY);
+	} while (retries--);
 
 	return -ETIME;
 }
@@ -329,19 +337,20 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 
 enum imanager_device_table_type { DEVID = 0, HWPIN, POLARITY };
 
-static int imanager_read_device_config(struct imanager_ec_data *ec)
+static int imanager_read_device_config(struct imanager_device_data *imgr)
 {
+	struct imanager_ec_data *ec = &imgr->ec;
 	struct imanager_ec_message msgs[] = {
-		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, DEVID, NULL) },
-		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, HWPIN, NULL) },
-		{ IMANAGER_MSG_SIMPLE(EC_MAX_DID, 0, POLARITY, NULL) },
+		{ IMANAGER_MSG(EC_MAX_DID, 0, DEVID, EC_CMD_DEVTBL_RD) },
+		{ IMANAGER_MSG(EC_MAX_DID, 0, HWPIN, EC_CMD_DEVTBL_RD) },
+		{ IMANAGER_MSG(EC_MAX_DID, 0, POLARITY, EC_CMD_DEVTBL_RD) },
 	};
 	struct imanager_device_attribute *attr;
 	int i, j, ret;
 
 	/* Read iManager device configurations */
 	for (i = 0; i < ARRAY_SIZE(msgs); i++) {
-		ret = imanager_read(ec, EC_CMD_DEV_TBL_RD, &msgs[i]);
+		ret = imanager_read(imgr, &msgs[i]);
 		if (ret)
 			return ret;
 	}
@@ -393,21 +402,22 @@ static const char *project_code_to_str(unsigned int code)
 	return "unspecified";
 }
 
-static int imanager_read_firmware_version(struct imanager_ec_data *ec)
+static int imanager_read_firmware_version(struct imanager_device_data *imgr)
 {
 	char pcb_name[IMANAGER_PCB_NAME_LEN] = { 0 };
-	struct imanager_info *info = &ec->info;
+	struct imanager_info *info = &imgr->ec.info;
 	struct imanager_ec_message msg = {
 		.rlen = ARRAY_SIZE(pcb_name) - 1,
 		.wlen = 0,
 		.param = 0,
+		.cmd = EC_CMD_FW_INFO_RD,
 		.data = pcb_name,
 	};
 	struct imanager_ec_version ver;
 	unsigned int val;
 	int ret;
 
-	ret = imanager_read_ram(ec, EC_RAM_ACPI, EC_OFFSET_FW_RELEASE,
+	ret = imanager_mem_read(imgr, EC_RAM_ACPI, EC_OFFSET_FW_RELEASE,
 				(u8 *)&ver, sizeof(ver));
 	if (ret < 0)
 		return ret;
@@ -428,7 +438,7 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 	 * so we need to read a fixed amount of chars. Also, the name length
 	 * may vary by one char (SOM6867 vs. SOM-6867).
 	 */
-	ret = imanager_read(ec, EC_CMD_FW_INFO_RD, &msg);
+	ret = imanager_read(imgr, &msg);
 	if (ret)
 		return ret;
 
@@ -441,7 +451,7 @@ static int imanager_read_firmware_version(struct imanager_ec_data *ec)
 			 info->firmware_minor, info->type);
 }
 
-static int imanager_ec_init(struct imanager_ec_data *ec)
+static int imanager_ec_init(struct imanager_device_data *imgr)
 {
 	int ret;
 
@@ -449,199 +459,238 @@ static int imanager_ec_init(struct imanager_ec_data *ec)
 	inb(IT8528_DAT_PORT);
 	inb(IT8518_DAT_PORT);
 
-	ret = imanager_read_firmware_version(ec);
+	ret = imanager_read_firmware_version(imgr);
 	if (ret < 0)
 		return ret;
 
-	return imanager_read_device_config(ec);
+	return imanager_read_device_config(imgr);
 }
 
-static inline void data_to_ec(struct imanager_io_ops *io, u8 *data, u8 len,
-			      int offset)
+static inline void
+data_to_ec(struct imanager_device_data *imgr, u8 *data, u8 len, int offset)
 {
-	int i;
+	int i = 0;
 
-	for (i = 0; i < len; i++)
-		io->write(offset++, data[i]);
+	while (i < len)
+		imgr->ec.iop.write(offset++, data[i++]);
 }
 
-static inline void data_from_ec(struct imanager_io_ops *io, u8 *data, u8 len,
-				int offset)
+static inline void
+data_from_ec(struct imanager_device_data *imgr, u8 *data, u8 len, int offset)
 {
-	int i;
+	int i = 0;
 
-	for (i = 0; i < len; i++)
-		data[i] = io->read(offset++);
+	while (i < len)
+		data[i++] = imgr->ec.iop.read(offset++);
 }
 
-static int imanager_msg_xfer(struct imanager_ec_data *ec, u8 cmd,
+static inline int set_offset(bool payload)
+{
+	return payload ? EC_MSG_OFFSET_PAYLOAD : EC_MSG_OFFSET_DATA;
+}
+
+static int imanager_msg_xfer(struct imanager_device_data *imgr,
 			     struct imanager_ec_message *msg, bool payload)
 {
 	int ret;
-	int offset = EC_MSG_OFFSET_DATA;
 
-	ret = imanager_check_ec_ready(&ec->io);
+	ret = imanager_check_ec_ready(&imgr->ec.iop);
 	if (ret)
 		return ret;
 
-	ec->io.write(EC_MSG_OFFSET_PARAM, msg->param);
+	imgr->ec.iop.write(EC_MSG_OFFSET_PARAM, msg->param);
 
 	if (msg->wlen) {
 		if (msg->data) {
-			data_to_ec(&ec->io, msg->data, msg->wlen, offset);
-			ec->io.write(EC_MSG_OFFSET_LEN, msg->wlen);
+			data_to_ec(imgr, msg->data, msg->wlen,
+				   EC_MSG_OFFSET_DATA);
+			imgr->ec.iop.write(EC_MSG_OFFSET_LEN, msg->wlen);
 		} else {
-			data_to_ec(&ec->io, msg->u.data, msg->wlen, offset);
+			data_to_ec(imgr, msg->u.data, msg->wlen,
+				   EC_MSG_OFFSET_DATA);
 		}
 	}
 
 	/* Execute command */
-	ec->io.write(EC_MSG_OFFSET_CMD, cmd);
-	ret = imanager_check_ec_ready(&ec->io);
+	imgr->ec.iop.write(EC_MSG_OFFSET_CMD, msg->cmd);
+	ret = imanager_check_ec_ready(&imgr->ec.iop);
 	if (ret)
 		return ret;
 
 	/* GPIO and I2C have different success return values */
-	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
+	ret = imgr->ec.iop.read(EC_MSG_OFFSET_STATUS);
 	if ((ret != EC_F_SUCCESS) && !(ret & EC_F_CMD_COMPLETE))
 		return -EFAULT;
 	/*
 	 * EC I2C may return an error code which we need to handoff
 	 * to the caller
 	 */
-	else if (ret & 0x007e)
+	else if (ret & EC_I2C_STATUS_MASK)
 		return ret;
 
 	if (msg->rlen) {
 		if (msg->rlen == EC_F_HWMON_MSG)
-			msg->rlen = ec->io.read(EC_MSG_OFFSET_LEN);
-		if (payload) /* i2c, hwmon, wdt */
-			offset = EC_MSG_OFFSET_PAYLOAD;
+			msg->rlen = imgr->ec.iop.read(EC_MSG_OFFSET_LEN);
 		if (msg->data)
-			data_from_ec(&ec->io, msg->data, msg->rlen, offset);
+			data_from_ec(imgr, msg->data, msg->rlen,
+				     set_offset(payload));
 		else
-			data_from_ec(&ec->io, msg->u.data, msg->rlen, offset);
+			data_from_ec(imgr, msg->u.data, msg->rlen,
+				     set_offset(payload));
 	}
 
 	return 0;
 }
 
+static int imanager_mem_rw(struct imanager_device_data *imgr,
+			   struct imanager_ec_message *msg)
+{
+	int ret;
+
+	if (!msg->data || !(msg->rlen != msg->wlen))
+		return -EINVAL;
+
+	ret = imanager_check_ec_ready(&imgr->ec.iop);
+	if (ret)
+		return ret;
+
+	if (msg->rlen) {
+		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, msg->rlen);
+	} else if (msg->wlen) {
+		data_to_ec(imgr, msg->data, msg->wlen, EC_MSG_OFFSET_RAM_DATA);
+		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, msg->wlen);
+	}
+
+	imgr->ec.iop.write(EC_MSG_OFFSET_PARAM, msg->param);
+	imgr->ec.iop.write(EC_MSG_OFFSET_DATA, msg->u.data[0]);
+	imgr->ec.iop.write(EC_MSG_OFFSET_CMD, msg->cmd);
+	ret = imanager_check_ec_ready(&imgr->ec.iop);
+	if (ret)
+		return ret;
+
+	ret = imgr->ec.iop.read(EC_MSG_OFFSET_STATUS);
+	if (ret != EC_F_SUCCESS)
+		return -EFAULT;
+
+	if (msg->rlen)
+		data_from_ec(imgr, msg->data, msg->rlen,
+			     EC_MSG_OFFSET_RAM_DATA);
+
+	return 0;
+}
+
 /**
- * imanager_read_ram - read 'size' amount of data @ 'offset' of 'ram_type'
- * @ec:		imanager_ec_data structure describing the EC
+ * imanager_mem_read - read 'len' amount of data @ 'offset' of 'ram_type'
+ * @imgr:	imanager_device_data structure describing the iManager
  * @ram_type:	RAM type such as ACPI, HW, or EXternal
  * @offset:	offset within the RAM segment
  * @data:	data pointer
  * @len:	data length
  */
-int imanager_read_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
-		      u8 *data, u8 len)
+int imanager_mem_read(struct imanager_device_data *imgr, int ram_type,
+		      u8 offset, u8 *data, u8 len)
 {
 	int ret;
+	struct imanager_ec_message msg = {
+		.rlen = len,
+		.wlen = 0,
+		.param = ram_type,
+		.cmd = EC_CMD_RAM_RD,
+		.u.data[0] = offset,
+		.data = data,
+	};
 
-	ret = imanager_check_ec_ready(&ec->io);
-	if (ret)
-		return ret;
+	mutex_lock(&imgr->lock);
+	ret = imanager_mem_rw(imgr, &msg);
+	mutex_unlock(&imgr->lock);
 
-	ec->io.write(EC_MSG_OFFSET_PARAM, ram_type);
-	ec->io.write(EC_MSG_OFFSET_DATA, offset);
-	ec->io.write(EC_MSG_OFFSET_LEN, len);
-	ec->io.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_RD);
-
-	ret = imanager_check_ec_ready(&ec->io);
-	if (ret)
-		return ret;
-
-	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
-	if (ret != EC_F_SUCCESS)
-		return -EIO;
-
-	data_from_ec(&ec->io, data, len, EC_MSG_OFFSET_RAM_DATA);
-
-	return 0;
+	return ret;
 }
-EXPORT_SYMBOL_GPL(imanager_read_ram);
+EXPORT_SYMBOL_GPL(imanager_mem_read);
 
 /**
- * imanager_write_ram - write 'len' amount of data @ 'offset' of 'ram_type'
- * @ec:		imanager_ec_data structure describing the EC
- * @ram_type:	RAM type such as ACPI, HW, or EXternal
+ * imanager_mem_write - write 'len' amount of data @ 'offset' of 'ram_type'
+ * @imgr:	imanager_device_data structure describing the iManager
+ * @mem_type:	Type of memory such as ACPI, HW, or EXternal
  * @offset:	offset within the RAM segment
  * @data:	data pointer
  * @len:	data length
  */
-int imanager_write_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
-		       u8 *data, u8 len)
+int imanager_mem_write(struct imanager_device_data *imgr, int mem_type,
+		       u8 offset, u8 *data, u8 len)
 {
 	int ret;
+	struct imanager_ec_message msg = {
+		.rlen = 0,
+		.wlen = len,
+		.param = mem_type,
+		.cmd = EC_CMD_RAM_WR,
+		.u.data[0] = offset,
+		.data = data,
+	};
 
-	ret = imanager_check_ec_ready(&ec->io);
-	if (ret)
-		return ret;
+	mutex_lock(&imgr->lock);
+	ret = imanager_mem_rw(imgr, &msg);
+	mutex_unlock(&imgr->lock);
 
-	ec->io.write(EC_MSG_OFFSET_PARAM, ram_type);
-	ec->io.write(EC_MSG_OFFSET_DATA, offset);
-	ec->io.write(EC_MSG_OFFSET_LEN, len);
-
-	data_to_ec(&ec->io, data, len, EC_MSG_OFFSET_RAM_DATA);
-
-	ec->io.write(EC_MSG_OFFSET_CMD, EC_CMD_RAM_WR);
-
-	ret = imanager_check_ec_ready(&ec->io);
-	if (ret)
-		return ret;
-
-	ret = ec->io.read(EC_MSG_OFFSET_STATUS);
-	if (ret != EC_F_SUCCESS)
-		return -EIO;
-
-	return 0;
+	return ret;
 }
-EXPORT_SYMBOL_GPL(imanager_write_ram);
+EXPORT_SYMBOL_GPL(imanager_mem_write);
 
 /**
  * imanager_read - read data through request/response messaging
- * @ec:		imanager_ec_data structure describing the EC
- * @cmd:	imanager EC firmware command
+ * @imgr:	imanager_device_data structure describing the iManager
  * @msg:	imanager_ec_message structure holding the message
  */
-int imanager_read(struct imanager_ec_data *ec, u8 cmd,
+int imanager_read(struct imanager_device_data *imgr,
 		  struct imanager_ec_message *msg)
 {
-	return imanager_msg_xfer(ec, cmd, msg, false);
+	int ret;
+
+	mutex_lock(&imgr->lock);
+	ret = imanager_msg_xfer(imgr, msg, false);
+	mutex_unlock(&imgr->lock);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(imanager_read);
 
 /**
  * imanager_write - write data through request/response messaging
- * @ec:		imanager_ec_data structure describing the EC
- * @cmd:	imanager EC firmware command
+ * @imgr:	imanager_device_data structure describing the iManager
  * @msg:	imanager_ec_message structure holding the message
  */
-int imanager_write(struct imanager_ec_data *ec, u8 cmd,
+int imanager_write(struct imanager_device_data *imgr,
 		   struct imanager_ec_message *msg)
 {
-	return imanager_msg_xfer(ec, cmd, msg, true);
+	int ret;
+
+	mutex_lock(&imgr->lock);
+	ret = imanager_msg_xfer(imgr, msg, true);
+	mutex_unlock(&imgr->lock);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(imanager_write);
 
 /**
  * imanager_read8 - read 8-bit data
- * @ec:		imanager_ec_data structure describing the EC
+ * @imgr:	imanager_device_data structure describing the iManager
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  */
-int imanager_read8(struct imanager_ec_data *ec, u8 cmd, u8 param)
+int imanager_read8(struct imanager_device_data *imgr, u8 cmd, u8 param)
 {
 	int ret;
 	struct imanager_ec_message msg = {
 		.rlen = 1,
 		.wlen = 0,
 		.param = param,
+		.cmd = cmd,
 		.data = NULL,
 	};
 
-	ret = imanager_read(ec, cmd, &msg);
+	ret = imanager_read(imgr, &msg);
 	if (ret)
 		return ret;
 
@@ -651,21 +700,22 @@ EXPORT_SYMBOL_GPL(imanager_read8);
 
 /**
  * imanager_read16 - read 16-bit data
- * @ec:		imanager_ec_data structure describing the EC
+ * @imgr:	imanager_device_data structure describing the iManager
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  */
-int imanager_read16(struct imanager_ec_data *ec, u8 cmd, u8 param)
+int imanager_read16(struct imanager_device_data *imgr, u8 cmd, u8 param)
 {
 	int ret;
 	struct imanager_ec_message msg = {
 		.rlen = 2,
 		.wlen = 0,
 		.param = param,
+		.cmd = cmd,
 		.data = NULL,
 	};
 
-	ret = imanager_read(ec, cmd, &msg);
+	ret = imanager_read(imgr, &msg);
 	if (ret)
 		return ret;
 
@@ -675,45 +725,49 @@ EXPORT_SYMBOL_GPL(imanager_read16);
 
 /**
  * imanager_write8 - write 8-bit data
- * @ec:		imanager_ec_data structure describing the EC
+ * @imgr:	imanager_device_data structure describing the iManager
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  * @byte:	8-bit data
  */
-int imanager_write8(struct imanager_ec_data *ec, u8 cmd, u8 param, u8 byte)
+int imanager_write8(struct imanager_device_data *imgr, u8 cmd, u8 param,
+		    u8 byte)
 {
 	struct imanager_ec_message msg = {
 		.rlen = 0,
 		.wlen = 1,
 		.param = param,
+		.cmd = cmd,
 		.u = {
 			.data = { byte, 0 },
 		},
 	};
 
-	return imanager_write(ec, cmd, &msg);
+	return imanager_write(imgr, &msg);
 }
 EXPORT_SYMBOL_GPL(imanager_write8);
 
 /**
  * imanager_write16 - write 16-bit data
- * @ec:		imanager_ec_data structure describing the EC
+ * @imgr:	imanager_device_data structure describing the iManager
  * @cmd:	imanager EC firmware command
  * @param:	parameter depening on cmd - device ID, offset or unit number
  * @word:	16-bit data
  */
-int imanager_write16(struct imanager_ec_data *ec, u8 cmd, u8 param, u16 word)
+int imanager_write16(struct imanager_device_data *imgr, u8 cmd, u8 param,
+		     u16 word)
 {
 	struct imanager_ec_message msg = {
 		.rlen = 0,
 		.wlen = 2,
 		.param = param,
+		.cmd = cmd,
 		.u = {
 			.data = { (word >> 8), (word & 0xff), 0 },
 		},
 	};
 
-	return imanager_write(ec, cmd, &msg);
+	return imanager_write(imgr, &msg);
 }
 EXPORT_SYMBOL_GPL(imanager_write16);
 
@@ -845,37 +899,36 @@ static inline int ec_read_chipid(u16 addr)
 static int imanager_detect_device(struct imanager_device_data *imgr)
 {
 	struct imanager_ec_data *ec = &imgr->ec;
-	struct device *dev = imgr->dev;
 	struct imanager_info *info = &imgr->ec.info;
 	int chipid = ec_read_chipid(EC_BASE_ADDR);
 	int ret;
 
 	if (chipid == CHIP_ID_IT8518) {
-		ec->io.read	= ec_io18_read;
-		ec->io.write	= ec_io18_write;
+		ec->iop.read	= ec_io18_read;
+		ec->iop.write	= ec_io18_write;
 		ec->chip_name	= chip_names[IT8518];
 	} else if (chipid == CHIP_ID_IT8528) {
-		ec->io.read	= ec_io28_read;
-		ec->io.write	= ec_io28_write;
+		ec->iop.read	= ec_io28_read;
+		ec->iop.write	= ec_io28_write;
 		ec->chip_name	= chip_names[IT8528];
 	}
 
-	ret = imanager_ec_init(ec);
+	ret = imanager_ec_init(imgr);
 	if (ret) {
-		dev_err(dev, "iManager firmware communication error\n");
+		dev_err(imgr->dev, "iManager firmware communication error\n");
 		return ret;
 	}
 
-	dev_info(dev, "Found Advantech iManager %s: %s (%s)\n",
+	dev_info(imgr->dev, "Found Advantech iManager %s: %s (%s)\n",
 		 ec->chip_name, info->version, info->type);
 
-	ret = sysfs_create_group(&dev->kobj, &imanager_attr_group);
+	ret = sysfs_create_group(&imgr->dev->kobj, &imanager_attr_group);
 	if (ret)
 		return ret;
 
 	ret = imanager_register_cells(imgr);
 	if (ret)
-		sysfs_remove_group(&dev->kobj, &imanager_attr_group);
+		sysfs_remove_group(&imgr->dev->kobj, &imanager_attr_group);
 
 	return ret;
 }

@@ -17,7 +17,6 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
-#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/watchdog.h>
 #include "compat.h"
@@ -71,11 +70,11 @@ struct event_delay {
 		dummy;
 } __attribute__((__packed__));
 
-static int imanager_wdt_ctrl(struct imanager_ec_data *ec, int ctrl,
+static int imanager_wdt_ctrl(struct imanager_device_data *imgr, int ctrl,
 			     int event_type, uint timeout)
 {
 	struct imanager_ec_message msg = {
-		IMANAGER_MSG_SIMPLE(0, 0, ctrl, NULL)
+		IMANAGER_MSG(0, 0, ctrl, EC_CMD_WDT_CTRL),
 	};
 	u8 *fevent = &msg.u.data[0];
 	struct event_delay *event = (struct event_delay *)&msg.u.data[1];
@@ -111,36 +110,13 @@ static int imanager_wdt_ctrl(struct imanager_ec_data *ec, int ctrl,
 		}
 	}
 
-	return imanager_write(ec, EC_CMD_WDT_CTRL, &msg);
+	return imanager_write(imgr, &msg);
 }
 
 static inline int imanager_wdt_disable_all(struct imanager_wdt_data *data)
 {
-	struct imanager_ec_data *ec = &data->imgr->ec;
-
-	return (imanager_wdt_ctrl(ec, STOP, WDT_EVT_NONE, 0) ||
-		imanager_wdt_ctrl(ec, STOPBOOT, WDT_EVT_NONE, 0));
-}
-
-static int imanager_wdt_set(struct imanager_wdt_data *data, uint timeout)
-{
-	struct imanager_ec_data *ec = &data->imgr->ec;
-	int ret;
-
-	if (time_before(jiffies, data->last_updated + HZ + HZ / 2))
-		return 0;
-
-	if (data->timeout == timeout)
-		return 0;
-
-	ret = imanager_wdt_ctrl(ec, SET_TIMEOUT, WDT_EVT_PWRBTN, timeout);
-	if (ret < 0)
-		return ret;
-
-	data->timeout = timeout;
-	data->last_updated = jiffies;
-
-	return 0;
+	return (imanager_wdt_ctrl(data->imgr, STOP, WDT_EVT_NONE, 0) ||
+		imanager_wdt_ctrl(data->imgr, STOPBOOT, WDT_EVT_NONE, 0));
 }
 
 static int imanager_wdt_set_timeout(struct watchdog_device *wdt, uint timeout)
@@ -149,11 +125,20 @@ static int imanager_wdt_set_timeout(struct watchdog_device *wdt, uint timeout)
 	struct imanager_device_data *imgr = data->imgr;
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_set(data, timeout);
-	mutex_unlock(&imgr->lock);
+	if (time_before(jiffies, data->last_updated + HZ + HZ / 2))
+		return 0;
 
-	return ret;
+	if (data->timeout == timeout)
+		return 0;
+
+	ret = imanager_wdt_ctrl(imgr, SET_TIMEOUT, WDT_EVT_PWRBTN, timeout);
+	if (ret < 0)
+		return ret;
+
+	data->timeout = timeout;
+	data->last_updated = jiffies;
+
+	return 0;
 }
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 3, 0)
@@ -173,43 +158,43 @@ static uint imanager_wdt_get_timeleft(struct watchdog_device *wdt)
 static int imanager_wdt_start(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
-	struct imanager_device_data *imgr = data->imgr;
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(&imgr->ec, START, WDT_EVT_NONE, 0);
-	data->last_updated = jiffies;
-	mutex_unlock(&imgr->lock);
+	ret = imanager_wdt_ctrl(data->imgr, START, WDT_EVT_NONE, 0);
+	if (ret < 0)
+		return ret;
 
-	return ret;
+	data->last_updated = jiffies;
+
+	return 0;
 }
 
 static int imanager_wdt_stop(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
-	struct imanager_device_data *imgr = data->imgr;
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(&imgr->ec, STOP, WDT_EVT_NONE, 0);
-	data->last_updated = 0;
-	mutex_unlock(&imgr->lock);
+	ret = imanager_wdt_ctrl(data->imgr, STOP, WDT_EVT_NONE, 0);
+	if (ret < 0)
+		return ret;
 
-	return ret;
+	data->last_updated = 0;
+
+	return 0;
 }
 
 static int imanager_wdt_ping(struct watchdog_device *wdt)
 {
 	struct imanager_wdt_data *data = watchdog_get_drvdata(wdt);
-	struct imanager_device_data *imgr = data->imgr;
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_wdt_ctrl(&imgr->ec, RESET, WDT_EVT_NONE, 0);
-	data->last_updated = jiffies;
-	mutex_unlock(&imgr->lock);
+	ret = imanager_wdt_ctrl(data->imgr, RESET, WDT_EVT_NONE, 0);
+	if (ret < 0)
+		return ret;
 
-	return ret;
+	data->last_updated = jiffies;
+
+	return 0;
 }
 
 static const struct watchdog_info imanager_wdt_info = {
@@ -292,9 +277,7 @@ static void imanager_wdt_shutdown(struct platform_device *pdev)
 {
 	struct imanager_device_data *imgr = dev_get_drvdata(pdev->dev.parent);
 
-	mutex_lock(&imgr->lock);
-	imanager_wdt_ctrl(&imgr->ec, STOP, WDT_EVT_NONE, 0);
-	mutex_unlock(&imgr->lock);
+	imanager_wdt_ctrl(imgr, STOP, WDT_EVT_NONE, 0);
 }
 
 static struct platform_driver imanager_wdt_driver = {

@@ -20,24 +20,25 @@
 #define IMANAGER_VERSION_LEN	40
 
 /**
- * IMANAGER_MSG_SIMPLE - macro used to describe a simple iManager message
- * @read_len:	the message read length
- * @write_len:	the message write length
- * @parameter:	the message parameter
- * @_data:	pointer to data field
+ * IMANAGER_MSG - macro used to describe iManager message
+ * @read_len:	iManager message read length
+ * @write_len:	iManager message write length
+ * @parameter:	iManager message parameter
+ * @command:	iManager message command type
  *
- * This macro is used to create a struct imanager_ec_message used for basic
- * EC communication
+ * This macro create a struct imanager_ec_message used for basic EC
+ * communication
  */
-#define IMANAGER_MSG_SIMPLE(read_len, write_len, parameter, _data) \
+#define IMANAGER_MSG(read_len, write_len, parameter, command) \
 	.rlen = (read_len), .wlen = (write_len), \
-	.param = (parameter), .data = (_data)
+	.param = (parameter), .cmd = (command), .data = (NULL)
 
 /**
  * struct imanager_ec_message - Describes iManager EC message
  * @rlen:	iManager message read length
  * @wlen:	iManager message write length
  * @param:	iManager message parameter (offset, id, or unit number)
+ * @cmd:	iManager message command type
  * @u:		union holding struct imanager_ec_smb_message and data field
  * @data:	pointer to data field
  */
@@ -45,6 +46,7 @@ struct imanager_ec_message {
 	unsigned int rlen;
 	unsigned int wlen;
 	unsigned int param;
+	unsigned int cmd;
 	union {
 		struct imanager_ec_smb_message smb;
 		unsigned char data[EC_MSG_SIZE];
@@ -152,7 +154,6 @@ struct imanager_watchdog_device {
  * @firmware_major:	iManager EC firmware major revision
  * @firmware_minor:	iManager EC firmware minor revision
  * @type:		iManager type - release/debug/custom
- * @pcb_name:		PC board name
  * @version:		iManager version string
  */
 struct imanager_info {
@@ -167,19 +168,21 @@ struct imanager_info {
 /**
  * struct imanager_ec_data - iManager EC data structure
  * @features:	iManager feature mask
+ * @chip_name:	iManager chip name
  * @attr:	array of iManager device attribute structure
- * @io:		imanager_io_ops structure providing I/O operations
+ * @iop:	imanager_io_ops structure providing I/O operations
  * @gpio:	iManager GPIO device structure
  * @hwmon:	iManager Hardware monitor device structure
  * @i2c:	iManager I2C/SMBus device structure
  * @bl:		iManager Backlight/Brightness device structure
  * @wdt:	iManager Watchdog device structure
+ * @info:	iManager device information
  */
 struct imanager_ec_data {
 	unsigned int features;
 	const char *chip_name;
 	struct imanager_device_attribute	attr[EC_MAX_DID];
-	struct imanager_io_ops			io;
+	struct imanager_io_ops			iop;
 	struct imanager_gpio_device		gpio;
 	struct imanager_hwmon_device		hwmon;
 	struct imanager_i2c_device		i2c;
@@ -202,20 +205,22 @@ struct imanager_device_data {
 
 enum ec_ram_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };
 
-int imanager_read(struct imanager_ec_data *ec, u8 cmd,
+int imanager_read(struct imanager_device_data *imgr,
 		  struct imanager_ec_message *msg);
-int imanager_write(struct imanager_ec_data *ec, u8 cmd,
+int imanager_write(struct imanager_device_data *imgr,
 		   struct imanager_ec_message *msg);
 
-int imanager_read8(struct imanager_ec_data *ec, u8 cmd, u8 param);
-int imanager_write8(struct imanager_ec_data *ec, u8 cmd, u8 param, u8 byte);
+int imanager_read8(struct imanager_device_data *imgr, u8 cmd, u8 param);
+int imanager_write8(struct imanager_device_data *imgr, u8 cmd, u8 param,
+		    u8 byte);
 
-int imanager_read16(struct imanager_ec_data *ec, u8 cmd, u8 param);
-int imanager_write16(struct imanager_ec_data *ec, u8 cmd, u8 param, u16 word);
+int imanager_read16(struct imanager_device_data *imgr, u8 cmd, u8 param);
+int imanager_write16(struct imanager_device_data *imgr, u8 cmd, u8 param,
+		     u16 word);
 
-int imanager_read_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
-		      u8 *buf, u8 len);
-int imanager_write_ram(struct imanager_ec_data *ec, int ram_type, u8 offset,
-		       u8 *data, u8 size);
+int imanager_mem_read(struct imanager_device_data *imgr, int ram_type,
+		      u8 offset, u8 *buf, u8 len);
+int imanager_mem_write(struct imanager_device_data *imgr, int ram_type,
+		       u8 offset, u8 *data, u8 len);
 
 #endif

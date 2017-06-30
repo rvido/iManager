@@ -17,7 +17,6 @@
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include "compat.h"
 #include "imanager.h"
@@ -38,12 +37,6 @@
 #define SMBUS_FREQ_100KHZ	0x0200
 #define SMBUS_FREQ_400KHZ	0x0300
 
-#define imanager_i2c_wr_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, message, EC_CMD_I2C_WR)
-
-#define imanager_i2c_rw_combined(ec, message) \
-	imanager_i2c_block_wr_rw_combined(ec, message, EC_CMD_I2C_RW)
-
 struct ec_i2c_status {
 	u32 error	: 7;
 	u32 complete	: 1;
@@ -61,13 +54,29 @@ struct imanager_i2c_data {
 	int nadap;
 };
 
-static int imanager_i2c_eval_status(u8 status)
+static int imanager_i2c_wait_proc_complete(struct imanager_device_data *imgr)
 {
-	struct ec_i2c_status *_status = (struct ec_i2c_status *)&status;
+	int ret, retries = EC_MAX_RETRIES;
+	u8 val;
 
-	switch (_status->error) {
-	case 0:
-		return 0;
+	do {
+		ret = imanager_mem_read(imgr, EC_RAM_HW, EC_HWRAM_OFFSET_STATUS,
+					&val, sizeof(val));
+		if (ret < 0)
+			return ret;
+
+		if (!val)
+			return 0;
+
+		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
+	} while (retries--);
+
+	return -ETIME;
+}
+
+static inline int imanager_i2c_eval_error(int error)
+{
+	switch (error) {
 	case I2C_ERR_ADDR_NACK:
 		return -ENXIO;
 	case I2C_ERR_ACCESS:
@@ -83,39 +92,19 @@ static int imanager_i2c_eval_status(u8 status)
 	return -EIO;
 }
 
-static int imanager_i2c_wait_proc_complete(struct imanager_ec_data *ec)
-{
-	int ret, i;
-	u8 val;
-
-	for (i = 0; i < EC_MAX_RETRY; i++) {
-		ret = imanager_read_ram(ec, EC_RAM_HW, EC_HWRAM_OFFSET_STATUS,
-					&val, sizeof(val));
-		if (ret < 0)
-			return ret;
-
-		if (!val)
-			return 0;
-
-		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	}
-
-	return -ETIME;
-}
-
-static int imanager_i2c_block_wr_rw_combined(struct imanager_ec_data *ec,
-					     struct imanager_ec_message *msg,
-					     unsigned int protocol)
+static int imanager_i2c_block_wr_rw_combined(struct imanager_device_data *imgr,
+					     struct imanager_ec_message *msg)
 {
 	int ret;
+	struct ec_i2c_status *status = (struct ec_i2c_status *) &ret;
 
-	ret = imanager_i2c_wait_proc_complete(ec);
+	ret = imanager_i2c_wait_proc_complete(imgr);
 	if (ret)
 		return ret;
 
-	ret = imanager_write(ec, protocol, msg);
-	if (ret)
-		return imanager_i2c_eval_status(ret);
+	ret = imanager_write(imgr, msg);
+	if (status->error)
+		return imanager_i2c_eval_error(status->error);
 
 	if (msg->rlen) {
 		if (msg->rlen == 1)
@@ -130,9 +119,25 @@ static int imanager_i2c_block_wr_rw_combined(struct imanager_ec_data *ec,
 }
 
 static inline int
-imanager_i2c_write_freq(struct imanager_ec_data *ec, int did, int freq)
+imanager_i2c_wr_combined(struct imanager_device_data *imgr,
+			 struct imanager_ec_message *msg)
 {
-	return imanager_write16(ec, EC_CMD_SMB_FREQ_WR, did, freq);
+	msg->cmd = EC_CMD_I2C_WR;
+	return imanager_i2c_block_wr_rw_combined(imgr, msg);
+}
+
+static inline int
+imanager_i2c_rw_combined(struct imanager_device_data *imgr,
+			 struct imanager_ec_message *msg)
+{
+	msg->cmd = EC_CMD_I2C_RW;
+	return imanager_i2c_block_wr_rw_combined(imgr, msg);
+}
+
+static inline int
+imanager_i2c_write_freq(struct imanager_device_data *imgr, int did, int freq)
+{
+	return imanager_write16(imgr, EC_CMD_SMB_FREQ_WR, did, freq);
 }
 
 static inline int eval_read_len(int len)
@@ -141,12 +146,12 @@ static inline int eval_read_len(int len)
 }
 
 static inline int
-imanager_i2c_read_block(struct imanager_ec_data *ec,
+imanager_i2c_read_block(struct imanager_device_data *imgr,
 			struct imanager_ec_message *msg, u8 *buf)
 {
 	int ret;
 
-	ret = imanager_i2c_wr_combined(ec, msg);
+	ret = imanager_i2c_wr_combined(imgr, msg);
 	if (ret < 0)
 		return ret;
 
@@ -157,7 +162,7 @@ imanager_i2c_read_block(struct imanager_ec_data *ec,
 }
 
 static inline int
-imanager_i2c_write_block(struct imanager_ec_data *ec,
+imanager_i2c_write_block(struct imanager_device_data *imgr,
 			 struct imanager_ec_message *msg, u8 *buf)
 {
 	if (!buf[0] || (buf[0] > I2C_MAX_WRITE_SIZE))
@@ -165,7 +170,7 @@ imanager_i2c_write_block(struct imanager_ec_data *ec,
 
 	memcpy(&msg->u.data[EC_MSG_HDR_SIZE], &buf[1], buf[0]);
 
-	return imanager_i2c_wr_combined(ec, msg);
+	return imanager_i2c_wr_combined(imgr, msg);
 }
 
 static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
@@ -174,11 +179,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 {
 	struct imanager_i2c_data *data = i2c_get_adapdata(adap);
 	struct imanager_device_data *imgr = data->imgr;
-	struct imanager_ec_data *ec = &imgr->ec;
 	struct device *dev = data->dev;
 	int smb_devid = *(int *)adap->algo_data;
 	int val, ret = 0;
-	u16 addr16 = addr << 1; /* convert to 8-bit i2c slave address */
+	u16 addr16 = addr << 1;
 	u8 *buf = smb_data->block;
 	struct imanager_ec_message msg = {
 		.rlen = 0,
@@ -195,14 +199,12 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 	};
 	struct imanager_ec_smb_message *smb = &msg.u.smb;
 
-	mutex_lock(&imgr->lock);
-
 	switch (size) {
 	case I2C_SMBUS_QUICK:
 		msg.rlen = 0;
 		smb->hdr.rlen = 0;
 		smb->hdr.wlen = 1;
-		ret = imanager_i2c_wr_combined(ec, &msg);
+		ret = imanager_i2c_wr_combined(imgr, &msg);
 		break;
 	case I2C_SMBUS_BYTE:
 		if (read_write == I2C_SMBUS_WRITE) {
@@ -210,7 +212,7 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.rlen = 1;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			val = imanager_i2c_wr_combined(ec, &msg);
+			val = imanager_i2c_wr_combined(imgr, &msg);
 			if (val < 0)
 				ret = val;
 		} else {
@@ -221,7 +223,7 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			msg.rlen = 1;
 			smb->hdr.rlen = 1;
 			smb->hdr.wlen = 0;
-			val = imanager_i2c_rw_combined(ec, &msg);
+			val = imanager_i2c_rw_combined(imgr, &msg);
 			if (val < 0)
 				ret = val;
 			else
@@ -240,13 +242,13 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.wlen = 2;
 			smb->hdr.cmd = command;
 			smb->data[0] = smb_data->byte;
-			val = imanager_i2c_wr_combined(ec, &msg);
+			val = imanager_i2c_wr_combined(imgr, &msg);
 		} else {
 			msg.rlen = 1;
 			smb->hdr.rlen = 1;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			val = imanager_i2c_wr_combined(ec, &msg);
+			val = imanager_i2c_wr_combined(imgr, &msg);
 		}
 		if (val < 0)
 			ret = val;
@@ -266,13 +268,13 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.cmd = command;
 			smb->data[0] = smb_data->word & 0x00ff;
 			smb->data[1] = smb_data->word >> 8;
-			val = imanager_i2c_wr_combined(ec, &msg);
+			val = imanager_i2c_wr_combined(imgr, &msg);
 		} else {
 			msg.rlen = 2;
 			smb->hdr.rlen = 2;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			val = imanager_i2c_wr_combined(ec, &msg);
+			val = imanager_i2c_wr_combined(imgr, &msg);
 		}
 		if (val < 0)
 			ret = val;
@@ -290,13 +292,13 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.rlen = 0;
 			smb->hdr.wlen = 1 + buf[0];
 			smb->hdr.cmd = command;
-			ret = imanager_i2c_write_block(ec, &msg, buf);
+			ret = imanager_i2c_write_block(imgr, &msg, buf);
 		} else {
 			msg.rlen = eval_read_len(buf[0]);
 			smb->hdr.rlen = msg.rlen;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			ret = imanager_i2c_read_block(ec, &msg, buf);
+			ret = imanager_i2c_read_block(imgr, &msg, buf);
 		}
 		break;
 	case I2C_SMBUS_I2C_BLOCK_DATA:
@@ -310,21 +312,19 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			smb->hdr.rlen = 0;
 			smb->hdr.wlen = 1 + buf[0];
 			smb->hdr.cmd = command;
-			ret = imanager_i2c_write_block(ec, &msg, buf);
+			ret = imanager_i2c_write_block(imgr, &msg, buf);
 		} else {
 			msg.rlen = eval_read_len(buf[0]);
 			smb->hdr.rlen = msg.rlen;
 			smb->hdr.wlen = 1;
 			smb->hdr.cmd = command;
-			ret = imanager_i2c_read_block(ec, &msg, buf);
+			ret = imanager_i2c_read_block(imgr, &msg, buf);
 		}
 		break;
 	default:
 		dev_err(dev, "Unsupported transaction %d\n", size);
 		ret = -EOPNOTSUPP;
 	}
-
-	mutex_unlock(&imgr->lock);
 
 	return ret;
 }
@@ -386,7 +386,7 @@ imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
 		return ret;
 	}
 
-	ret = imanager_i2c_write_freq(&i2c->imgr->ec, did, freq);
+	ret = imanager_i2c_write_freq(i2c->imgr, did, freq);
 	if (ret < 0)
 		dev_warn(i2c->dev, "Failed to set bus frequency of %s\n",
 			 info->adapter.name);

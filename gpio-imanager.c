@@ -12,11 +12,9 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/device.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include "compat.h"
 #include "imanager.h"
@@ -24,6 +22,11 @@
 #define EC_GPIOF_DIR_OUT	BIT(6)
 #define EC_GPIOF_DIR_IN		BIT(7)
 
+/**
+ * struct imanager_gpio_data - Defines iManager GPIO data structure
+ * @imgr:	imanager_device_data structure describing the iManager
+ * @chip:	abstract kernel GPIO controller
+ */
 struct imanager_gpio_data {
 	struct imanager_device_data *imgr;
 	struct gpio_chip chip;
@@ -45,10 +48,7 @@ static int imanager_gpio_direction_in(struct gpio_chip *chip, uint offset)
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
-	mutex_lock(&imgr->lock);
-	imanager_write8(&imgr->ec, EC_CMD_GPIO_DIR_WR, attr->did,
-			EC_GPIOF_DIR_IN);
-	mutex_unlock(&imgr->lock);
+	imanager_write8(imgr, EC_CMD_GPIO_DIR_WR, attr->did, EC_GPIOF_DIR_IN);
 
 	return 0;
 }
@@ -60,10 +60,7 @@ imanager_gpio_direction_out(struct gpio_chip *chip, uint offset, int val)
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
-	mutex_lock(&imgr->lock);
-	imanager_write8(&imgr->ec, EC_CMD_GPIO_DIR_WR, attr->did,
-			EC_GPIOF_DIR_OUT);
-	mutex_unlock(&imgr->lock);
+	imanager_write8(imgr, EC_CMD_GPIO_DIR_WR, attr->did, EC_GPIOF_DIR_OUT);
 
 	return 0;
 }
@@ -76,11 +73,11 @@ static int imanager_gpio_get_direction(struct gpio_chip *chip, uint offset)
 	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_read8(&imgr->ec, EC_CMD_GPIO_DIR_RD, attr->did);
-	mutex_unlock(&imgr->lock);
+	ret = imanager_read8(imgr, EC_CMD_GPIO_DIR_RD, attr->did);
+	if (ret < 0)
+		return ret;
 
-	return ret & EC_GPIOF_DIR_IN ? GPIOF_DIR_IN : GPIOF_DIR_OUT;
+	return ret & EC_GPIOF_DIR_IN ? 1 : 0;
 }
 #endif
 
@@ -91,11 +88,11 @@ static int imanager_gpio_get(struct gpio_chip *chip, uint offset)
 	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 	int ret;
 
-	mutex_lock(&imgr->lock);
-	ret = imanager_read8(&imgr->ec, EC_CMD_HWP_RD, attr->did);
-	mutex_unlock(&imgr->lock);
+	ret = imanager_read8(imgr, EC_CMD_HWP_RD, attr->did);
+	if (ret < 0)
+		return ret;
 
-	return ret;
+	return !!ret;
 }
 
 static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
@@ -104,9 +101,7 @@ static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
 	struct imanager_device_data *imgr = data->imgr;
 	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
 
-	mutex_lock(&imgr->lock);
-	imanager_write8(&imgr->ec, EC_CMD_HWP_WR, attr->did, val);
-	mutex_unlock(&imgr->lock);
+	imanager_write8(imgr, EC_CMD_HWP_WR, attr->did, val);
 }
 
 static int imanager_gpio_probe(struct platform_device *pdev)
