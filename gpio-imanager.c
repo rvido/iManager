@@ -1,7 +1,7 @@
 /*
  * Advantech iManager GPIO driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -14,10 +14,10 @@
 
 #include <linux/gpio.h>
 #include <linux/init.h>
+#include "imanager.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include "compat.h"
-#include "imanager.h"
 
 #define EC_GPIOF_DIR_OUT	BIT(6)
 #define EC_GPIOF_DIR_IN		BIT(7)

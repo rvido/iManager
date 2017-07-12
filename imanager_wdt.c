@@ -1,7 +1,7 @@
 /*
  * Advantech iManager Watchdog driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
