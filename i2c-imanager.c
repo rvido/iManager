@@ -1,7 +1,7 @@
 /*
  * Advantech iManager SMBus bus driver
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -16,17 +16,18 @@
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
+#include "imanager.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include "compat.h"
-#include "imanager.h"
 
 #define I2C_SMBUS_BLOCK_SIZE	32UL
 #define I2C_MAX_READ_SIZE	I2C_SMBUS_BLOCK_SIZE
 #define I2C_MAX_WRITE_SIZE	(I2C_SMBUS_BLOCK_SIZE - 1)
 
-#define EC_HWRAM_OFFSET_STATUS	0UL
-
+#define I2C_ERR_BAD_ADDR	0x72UL
+#define I2C_ERR_NODEV		0x71UL
+#define I2C_ERR_BUSY		0x1AUL
 #define I2C_ERR_PROTO		0x19UL
 #define I2C_ERR_TIMEOUT		0x18UL
 #define I2C_ERR_ACCESS		0x17UL
@@ -54,39 +55,25 @@ struct imanager_i2c_data {
 	int nadap;
 };
 
-static int imanager_i2c_wait_proc_complete(struct imanager_device_data *imgr)
-{
-	int ret, retries = EC_MAX_RETRIES;
-	u8 val;
-
-	do {
-		ret = imanager_mem_read(imgr, EC_RAM_HW, EC_HWRAM_OFFSET_STATUS,
-					&val, sizeof(val));
-		if (ret < 0)
-			return ret;
-
-		if (!val)
-			return 0;
-
-		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	} while (retries--);
-
-	return -ETIME;
-}
-
 static inline int imanager_i2c_eval_error(int error)
 {
 	switch (error) {
+	case I2C_ERR_BAD_ADDR:
+		return -EFAULT;
+	case I2C_ERR_NODEV:
+		return -ENODEV;
 	case I2C_ERR_ADDR_NACK:
 		return -ENXIO;
 	case I2C_ERR_ACCESS:
 		return -EACCES;
 	case I2C_ERR_UNKNOWN:
-		return -EAGAIN;
+		return -EIO;
 	case I2C_ERR_TIMEOUT:
 		return -ETIME;
 	case I2C_ERR_PROTO:
 		return -EPROTO;
+	case I2C_ERR_BUSY:
+		return -EBUSY;
 	}
 
 	return -EIO;
@@ -96,13 +83,12 @@ static int imanager_i2c_block_wr_rw_combined(struct imanager_device_data *imgr,
 					     struct imanager_ec_message *msg)
 {
 	int ret;
-	struct ec_i2c_status *status = (struct ec_i2c_status *) &ret;
-
-	ret = imanager_i2c_wait_proc_complete(imgr);
-	if (ret)
-		return ret;
+	struct ec_i2c_status *status = (struct ec_i2c_status *)&ret;
 
 	ret = imanager_write(imgr, msg);
+	if (ret < 0)
+		return ret;
+
 	if (status->error)
 		return imanager_i2c_eval_error(status->error);
 
@@ -177,9 +163,9 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 			     char read_write, u8 command, int size,
 			     union i2c_smbus_data *smb_data)
 {
-	struct imanager_i2c_data *data = i2c_get_adapdata(adap);
-	struct imanager_device_data *imgr = data->imgr;
-	struct device *dev = data->dev;
+	struct imanager_i2c_data *i2c = i2c_get_adapdata(adap);
+	struct imanager_device_data *imgr = i2c->imgr;
+	struct device *dev = i2c->dev;
 	int smb_devid = *(int *)adap->algo_data;
 	int val, ret = 0;
 	u16 addr16 = addr << 1;
@@ -228,8 +214,8 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 				ret = val;
 			else
 				smb_data->byte = val;
-			break;
 		}
+		break;
 	case I2C_SMBUS_BYTE_DATA:
 		if (!smb_data) {
 			ret = -EINVAL;
@@ -326,6 +312,10 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 		ret = -EOPNOTSUPP;
 	}
 
+	if (ret < 0)
+		dev_warn(imgr->dev, "I2C transaction error %d %p %s\n",
+			 ret, &msg, read_write ? "read" : "write");
+
 	return ret;
 }
 
@@ -347,24 +337,28 @@ static const struct i2c_adapter imanager_i2c_adapters[] = {
 		.name	= "iManager SMB EEP adapter",
 		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
 		.algo	= &imanager_i2c_algorithm,
+		.retries = 3,
 	},
 	[I2C_OEM] = {
 		.owner	= THIS_MODULE,
 		.name	= "iManager I2C OEM adapter",
 		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
 		.algo	= &imanager_i2c_algorithm,
+		.retries = 3,
 	},
 	[SMB_1] = {
 		.owner	= THIS_MODULE,
 		.name	= "iManager SMB 1 adapter",
 		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
 		.algo	= &imanager_i2c_algorithm,
+		.retries = 3,
 	},
 	[SMB_PECI] = {
 		.owner	= THIS_MODULE,
 		.name	= "iManager SMB PECI adapter",
 		.class	= I2C_CLASS_HWMON | I2C_CLASS_SPD,
 		.algo	= &imanager_i2c_algorithm,
+		.retries = 3,
 	},
 };
 
