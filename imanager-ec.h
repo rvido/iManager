@@ -1,7 +1,7 @@
 /*
  * Advantech iManager - firmware interface
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -21,19 +21,15 @@
 
 #define EC_MAX_RETRIES			400UL
 
-#define CHIP_ID_IT8518			0x8518
-#define CHIP_ID_IT8528			0x8528
-
-#define EC_BASE_ADDR			0x029C
+#define EC_REG_BASE			0x029C
+#define EC_REG_DEVID			0x20	/* Device ID (2 bytes) */
+#define EC_IT8518_ID			0x8518
+#define EC_IT8528_ID			0x8528
 
 #define IT8528_CMD_PORT			0x029A
 #define IT8528_DAT_PORT			0x0299
 #define IT8518_CMD_PORT			0x029E
 #define IT8518_DAT_PORT			0x029F
-
-/* 16-bit device ID registers */
-#define CHIP_DEVID_MSB			0x20
-#define CHIP_DEVID_LSB			0x21
 
 #define EC_MAX_GPIO_NUM			8UL
 #define EC_MAX_ADC_NUM			5UL
@@ -76,7 +72,7 @@
 #define EC_CMD_WDT_CTRL			0x28UL
 
 /*
- * ACPI RAM offsets
+ * ACPI/HW RAM offsets
  */
 #define EC_OFFSET_FAN_ALERT		0x6FUL
 #define EC_OFFSET_FAN_ALERT_LIMIT	0x76UL
@@ -84,6 +80,7 @@
 #define EC_OFFSET_BRIGHTNESS2		0x52UL
 #define EC_OFFSET_BACKLIGHT_CTRL	0x99UL
 #define EC_OFFSET_FW_RELEASE		0xF8UL
+#define EC_OFFSET_I2C_STATUS		0UL
 
 /* iManager EC flags */
 #define EC_IO28_OUTBUF			BIT(0)
@@ -101,7 +98,7 @@
 #define EC_MSG_OFFSET_STATUS		EC_MSG_OFFSET(1)
 #define EC_MSG_OFFSET_PARAM		EC_MSG_OFFSET(2)
 #define EC_MSG_OFFSET_DATA		EC_MSG_OFFSET(3)
-#define EC_MSG_OFFSET_RAM_DATA		EC_MSG_OFFSET(4)
+#define EC_MSG_OFFSET_MEM_DATA		EC_MSG_OFFSET(4)
 #define EC_MSG_OFFSET_PAYLOAD		EC_MSG_OFFSET(7)
 #define EC_MSG_OFFSET_LEN		EC_MSG_OFFSET(0x2F)
 
