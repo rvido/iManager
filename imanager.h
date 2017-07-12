@@ -1,7 +1,7 @@
 /*
  * Advantech iManager MFD
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -26,7 +26,7 @@
  * @parameter:	iManager message parameter
  * @command:	iManager message command type
  *
- * This macro create a struct imanager_ec_message used for basic EC
+ * This macro creates a struct imanager_ec_message which is used for basic EC
  * communication
  */
 #define IMANAGER_MSG(read_len, write_len, parameter, command) \
@@ -199,11 +199,11 @@ struct imanager_ec_data {
  */
 struct imanager_device_data {
 	struct imanager_ec_data	ec;
-	struct device	*dev;
-	struct mutex	lock; /* generic mutex for imanager core */
+	struct device *dev;
+	struct mutex lock; /* generic mutex for imanager core */
 };
 
-enum ec_ram_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };
+enum ec_mem_type { EC_RAM_ACPI = 1, EC_RAM_HW, EC_RAM_EXT };
 
 int imanager_read(struct imanager_device_data *imgr,
 		  struct imanager_ec_message *msg);
@@ -218,9 +218,9 @@ int imanager_read16(struct imanager_device_data *imgr, u8 cmd, u8 param);
 int imanager_write16(struct imanager_device_data *imgr, u8 cmd, u8 param,
 		     u16 word);
 
-int imanager_mem_read(struct imanager_device_data *imgr, int ram_type,
-		      u8 offset, u8 *buf, u8 len);
-int imanager_mem_write(struct imanager_device_data *imgr, int ram_type,
-		       u8 offset, u8 *data, u8 len);
+int imanager_mem_read(struct imanager_device_data *imgr, int mem_type,
+		      int offset, u8 *data, int size);
+int imanager_mem_write(struct imanager_device_data *imgr, int mem_type,
+		       int offset, u8 *data, int size);
 
 #endif

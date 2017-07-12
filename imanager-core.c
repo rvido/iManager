@@ -2,7 +2,7 @@
  * Advantech iManager MFD driver
  * Partially derived from kempld-core
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -112,7 +112,7 @@ static inline int check_io28_ready(uint bit, uint state)
 		if (CHECK_BIT(ret, bit) == state)
 			return 0;
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	} while (retries--);
+	} while (--retries);
 
 	return -ETIME;
 }
@@ -190,15 +190,15 @@ static int ec_io28_write(int cmd, int value)
 	return ec_io28_outb(IT8528_CMD_PORT, cmd + EC_CMD_OFFSET_WRITE, value);
 }
 
-static int imanager_check_ec_ready(struct imanager_io_ops *io)
+static inline int imanager_check_ec_ready(struct imanager_io_ops *iop)
 {
 	int retries = EC_MAX_RETRIES;
 
 	do {
-		if (!io->read(EC_CMD_CHK_RDY))
+		if (!iop->read(EC_CMD_CHK_RDY))
 			return 0;
 		usleep_range(EC_DELAY_MIN, EC_DELAY_MAX);
-	} while (retries--);
+	} while (--retries);
 
 	return -ETIME;
 }
@@ -386,9 +386,9 @@ static int imanager_read_device_config(struct imanager_device_data *imgr)
 	return 0;
 }
 
-static const char *project_code_to_str(unsigned int code)
+static const char *project_code_to_str(char code)
 {
-	switch ((char)code) {
+	switch (code) {
 	case 'V':
 		return "release";
 	case 'X':
@@ -484,7 +484,7 @@ data_from_ec(struct imanager_device_data *imgr, u8 *data, u8 len, int offset)
 		data[i++] = imgr->ec.iop.read(offset++);
 }
 
-static inline int set_offset(bool payload)
+static inline int eval_offset(bool payload)
 {
 	return payload ? EC_MSG_OFFSET_PAYLOAD : EC_MSG_OFFSET_DATA;
 }
@@ -520,7 +520,7 @@ static int imanager_msg_xfer(struct imanager_device_data *imgr,
 	/* GPIO and I2C have different success return values */
 	ret = imgr->ec.iop.read(EC_MSG_OFFSET_STATUS);
 	if ((ret != EC_F_SUCCESS) && !(ret & EC_F_CMD_COMPLETE))
-		return -EFAULT;
+		return -EIO;
 	/*
 	 * EC I2C may return an error code which we need to handoff
 	 * to the caller
@@ -533,75 +533,73 @@ static int imanager_msg_xfer(struct imanager_device_data *imgr,
 			msg->rlen = imgr->ec.iop.read(EC_MSG_OFFSET_LEN);
 		if (msg->data)
 			data_from_ec(imgr, msg->data, msg->rlen,
-				     set_offset(payload));
+				     eval_offset(payload));
 		else
 			data_from_ec(imgr, msg->u.data, msg->rlen,
-				     set_offset(payload));
+				     eval_offset(payload));
 	}
 
 	return 0;
 }
 
-static int imanager_mem_rw(struct imanager_device_data *imgr,
-			   struct imanager_ec_message *msg)
+static int imanager_mem_rw(struct imanager_device_data *imgr, int mem_type,
+			   int offset, u8 *data, int size, bool read_write)
 {
-	int ret;
+	int ret, rlen, wlen, cmd;
 
-	if (!msg->data || !(msg->rlen != msg->wlen))
-		return -EINVAL;
+	if (read_write) {
+		rlen = 0;
+		wlen = size;
+		cmd  = EC_CMD_RAM_WR;
+	} else {
+		rlen = size;
+		wlen = 0;
+		cmd  = EC_CMD_RAM_RD;
+	}
 
 	ret = imanager_check_ec_ready(&imgr->ec.iop);
 	if (ret)
 		return ret;
 
-	if (msg->rlen) {
-		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, msg->rlen);
-	} else if (msg->wlen) {
-		data_to_ec(imgr, msg->data, msg->wlen, EC_MSG_OFFSET_RAM_DATA);
-		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, msg->wlen);
+	if (rlen) {
+		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, rlen);
+	} else if (wlen) {
+		data_to_ec(imgr, data, wlen, EC_MSG_OFFSET_MEM_DATA);
+		imgr->ec.iop.write(EC_MSG_OFFSET_LEN, wlen);
 	}
 
-	imgr->ec.iop.write(EC_MSG_OFFSET_PARAM, msg->param);
-	imgr->ec.iop.write(EC_MSG_OFFSET_DATA, msg->u.data[0]);
-	imgr->ec.iop.write(EC_MSG_OFFSET_CMD, msg->cmd);
+	imgr->ec.iop.write(EC_MSG_OFFSET_PARAM, mem_type);
+	imgr->ec.iop.write(EC_MSG_OFFSET_DATA, offset);
+	imgr->ec.iop.write(EC_MSG_OFFSET_CMD, cmd);
 	ret = imanager_check_ec_ready(&imgr->ec.iop);
 	if (ret)
 		return ret;
 
 	ret = imgr->ec.iop.read(EC_MSG_OFFSET_STATUS);
 	if (ret != EC_F_SUCCESS)
-		return -EFAULT;
+		return -EIO;
 
-	if (msg->rlen)
-		data_from_ec(imgr, msg->data, msg->rlen,
-			     EC_MSG_OFFSET_RAM_DATA);
+	if (rlen)
+		data_from_ec(imgr, data, rlen, EC_MSG_OFFSET_MEM_DATA);
 
 	return 0;
 }
 
 /**
- * imanager_mem_read - read 'len' amount of data @ 'offset' of 'ram_type'
+ * imanager_mem_read - read 'size' amount of data @ 'offset' of 'mem_type'
  * @imgr:	imanager_device_data structure describing the iManager
- * @ram_type:	RAM type such as ACPI, HW, or EXternal
- * @offset:	offset within the RAM segment
+ * @mem_type:	type of memory region such as ACPI or HW
+ * @offset:	offset within the memory region
  * @data:	data pointer
- * @len:	data length
+ * @size:	data length
  */
-int imanager_mem_read(struct imanager_device_data *imgr, int ram_type,
-		      u8 offset, u8 *data, u8 len)
+int imanager_mem_read(struct imanager_device_data *imgr, int mem_type,
+		      int offset, u8 *data, int size)
 {
 	int ret;
-	struct imanager_ec_message msg = {
-		.rlen = len,
-		.wlen = 0,
-		.param = ram_type,
-		.cmd = EC_CMD_RAM_RD,
-		.u.data[0] = offset,
-		.data = data,
-	};
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_mem_rw(imgr, &msg);
+	ret = imanager_mem_rw(imgr, mem_type, offset, data, size, false);
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -609,28 +607,20 @@ int imanager_mem_read(struct imanager_device_data *imgr, int ram_type,
 EXPORT_SYMBOL_GPL(imanager_mem_read);
 
 /**
- * imanager_mem_write - write 'len' amount of data @ 'offset' of 'ram_type'
+ * imanager_mem_write - write 'size' amount of data @ 'offset' of 'mem_type'
  * @imgr:	imanager_device_data structure describing the iManager
- * @mem_type:	Type of memory such as ACPI, HW, or EXternal
- * @offset:	offset within the RAM segment
+ * @mem_type:	type of memory region such as ACPI or HW
+ * @offset:	offset within the memory region
  * @data:	data pointer
- * @len:	data length
+ * @size:	data length
  */
 int imanager_mem_write(struct imanager_device_data *imgr, int mem_type,
-		       u8 offset, u8 *data, u8 len)
+		       int offset, u8 *data, int size)
 {
 	int ret;
-	struct imanager_ec_message msg = {
-		.rlen = 0,
-		.wlen = len,
-		.param = mem_type,
-		.cmd = EC_CMD_RAM_WR,
-		.u.data[0] = offset,
-		.data = data,
-	};
 
 	mutex_lock(&imgr->lock);
-	ret = imanager_mem_rw(imgr, &msg);
+	ret = imanager_mem_rw(imgr, mem_type, offset, data, size, true);
 	mutex_unlock(&imgr->lock);
 
 	return ret;
@@ -890,27 +880,32 @@ err:
 	return ret;
 }
 
-static inline int ec_read_chipid(u16 addr)
+static inline int
+ec_read_devid(int ioaddr)
 {
-	return (ec_inb(addr, CHIP_DEVID_MSB) << 8 |
-		ec_inb(addr, CHIP_DEVID_LSB));
+	return (ec_inb(ioaddr, EC_REG_DEVID) << 8 |
+		ec_inb(ioaddr, EC_REG_DEVID + 1));
 }
 
 static int imanager_detect_device(struct imanager_device_data *imgr)
 {
 	struct imanager_ec_data *ec = &imgr->ec;
 	struct imanager_info *info = &imgr->ec.info;
-	int chipid = ec_read_chipid(EC_BASE_ADDR);
-	int ret;
+	int ret = ec_read_devid(EC_REG_BASE);
 
-	if (chipid == CHIP_ID_IT8518) {
+	switch (ret) {
+	case EC_IT8518_ID:
 		ec->iop.read	= ec_io18_read;
 		ec->iop.write	= ec_io18_write;
 		ec->chip_name	= chip_names[IT8518];
-	} else if (chipid == CHIP_ID_IT8528) {
+		break;
+	case EC_IT8528_ID:
 		ec->iop.read	= ec_io28_read;
 		ec->iop.write	= ec_io28_write;
 		ec->chip_name	= chip_names[IT8528];
+		break;
+	default:
+		return -ENODEV;
 	}
 
 	ret = imanager_ec_init(imgr);
@@ -971,12 +966,16 @@ static struct platform_driver imanager_driver = {
 
 static int __init imanager_init(void)
 {
-	int chipid = ec_read_chipid(EC_BASE_ADDR);
-	int ret;
+	int ret = ec_read_devid(EC_REG_BASE);
 
 	/* Check for the presence of the EC chip */
-	if ((chipid != CHIP_ID_IT8518) && (chipid != CHIP_ID_IT8528))
+	switch (ret) {
+	case EC_IT8518_ID:
+	case EC_IT8528_ID:
+		break;
+	default:
 		return -ENODEV;
+	}
 
 	ret = imanager_platform_create();
 	if (ret)
