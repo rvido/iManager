@@ -2,7 +2,7 @@
  * Advantech iManager Hardware Monitoring driver
  * Partially derived from nct6775
  *
- * Copyright (C) 2016 Advantech Co., Ltd.
+ * Copyright (C) 2016-2017 Advantech Co., Ltd.
  * Author: Richard Vidal-Dorsch <richard.dorsch@advantech.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -264,7 +264,7 @@ imanager_hwmon_read_fan_ctrl(struct imanager_device_data *imgr, int num,
 	fan->pwm = ret;
 
 	ret = imanager_hwmon_read_fan_alert(imgr, num, fan);
-	if (ret)
+	if (ret < 0)
 		return ret;
 
 	fan->valid = true;
@@ -522,13 +522,12 @@ store_fan_min(struct device *dev, struct device_attribute *attr,
 	unsigned long val = 0;
 	int err;
 
+	if (ctrl->mode != MODE_AUTO)
+		return count;
+
 	err = kstrtoul(buf, 10, &val);
 	if (err < 0)
 		return err;
-
-	/* do not apply value if not in cruise mode */
-	if (ctrl->mode != MODE_AUTO)
-		return count;
 
 	fan->cfg.rpm_min = cpu_to_be16(val);
 	imanager_hwmon_write_fan_config(imgr, nr, fan);
@@ -548,13 +547,12 @@ store_fan_max(struct device *dev, struct device_attribute *attr,
 	unsigned long val = 0;
 	int err;
 
+	if (ctrl->mode != MODE_AUTO)
+		return count;
+
 	err = kstrtoul(buf, 10, &val);
 	if (err < 0)
 		return err;
-
-	/* do not apply value if not in cruise mode */
-	if (ctrl->mode != MODE_AUTO)
-		return count;
 
 	fan->cfg.rpm_max = cpu_to_be16(val);
 	imanager_hwmon_write_fan_config(imgr, nr, fan);
@@ -715,12 +713,12 @@ store_pwm_mode(struct device *dev, struct device_attribute *attr,
 	unsigned long val = 0;
 	int err;
 
+	if (ctrl->mode != MODE_AUTO)
+		return count;
+
 	err = kstrtoul(buf, 10, &val);
 	if (err < 0)
 		return err;
-
-	if (ctrl->mode != MODE_AUTO)
-		return count;
 
 	ctrl->type = val ? CTRL_RPM : CTRL_PWM;
 	ctrl->enable = 1;
@@ -747,7 +745,7 @@ show_temp_max(struct device *dev, struct device_attribute *attr, char *buf)
 	return sprintf(buf, "%u\n", data->fan[nr].cfg.temp_max * 1000);
 }
 
-static inline bool is_outside(int min, int max, int value)
+static inline bool check_boundary(int value, int min, int max)
 {
 	return (value < min) || (value > max);
 }
@@ -760,7 +758,7 @@ show_temp_alarm(struct device *dev, struct device_attribute *attr, char *buf)
 	struct fan_dev_config *cfg = &data->fan[nr].cfg;
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&cfg->control;
 	bool is_alarm = (ctrl->mode == MODE_AUTO) ? 0 :
-			is_outside(cfg->temp_min, cfg->temp_max, cfg->temp);
+			check_boundary(cfg->temp, cfg->temp_min, cfg->temp_max);
 
 	return sprintf(buf, "%u\n", is_alarm);
 }
@@ -776,6 +774,9 @@ static ssize_t store_temp_min(struct device *dev, struct device_attribute *attr,
 	long val = 0;
 	int err;
 
+	if (ctrl->mode != MODE_AUTO)
+		return count;
+
 	err = kstrtoul(buf, 10, &val);
 	if (err < 0)
 		return err;
@@ -783,10 +784,6 @@ static ssize_t store_temp_min(struct device *dev, struct device_attribute *attr,
 	/* temperature in 1/10 degC */
 	val = DIV_ROUND_CLOSEST(val, 1000);
 	val = val > 100 ? 100 : val;
-
-	/* do not apply value if not in cruise mode */
-	if (ctrl->mode != MODE_AUTO)
-		return count;
 
 	/*
 	 * The iManager provides three different temperature limit values
@@ -815,16 +812,15 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 	long val = 0;
 	int err;
 
+	if (ctrl->mode != MODE_AUTO)
+		return count;
+
 	err = kstrtoul(buf, 10, &val);
 	if (err < 0)
 		return err;
 
 	val = DIV_ROUND_CLOSEST(val, 1000);
 	val = val > 100 ? 100 : val;
-
-	/* do not apply value if not in cruise mode */
-	if (ctrl->mode != MODE_AUTO)
-		return count;
 
 	fan->cfg.temp_max = val;
 	imanager_hwmon_write_fan_config(imgr, nr, fan);
