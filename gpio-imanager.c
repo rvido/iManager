@@ -14,10 +14,10 @@
 
 #include <linux/gpio.h>
 #include <linux/init.h>
-#include "imanager.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include "compat.h"
+#include "imanager.h"
 
 #define EC_GPIOF_DIR_OUT	BIT(6)
 #define EC_GPIOF_DIR_IN		BIT(7)
