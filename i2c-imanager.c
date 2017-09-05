@@ -16,10 +16,10 @@
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
-#include "imanager.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include "compat.h"
+#include "imanager.h"
 
 #define I2C_SMBUS_BLOCK_SIZE	32UL
 #define I2C_MAX_READ_SIZE	I2C_SMBUS_BLOCK_SIZE
@@ -312,9 +312,9 @@ static s32 imanager_i2c_xfer(struct i2c_adapter *adap, u16 addr, ushort flags,
 		ret = -EOPNOTSUPP;
 	}
 
-	if (ret < 0)
-		dev_warn(imgr->dev, "I2C transaction error %d %p %s\n",
-			 ret, &msg, read_write ? "read" : "write");
+	if ((ret < 0) && (size != I2C_SMBUS_QUICK) && (size != I2C_SMBUS_BYTE))
+		dev_warn(imgr->dev, "I2C transaction error %d %d %s\n",
+			 ret, size, read_write ? "read" : "write");
 
 	return ret;
 }
@@ -362,11 +362,15 @@ static const struct i2c_adapter imanager_i2c_adapters[] = {
 	},
 };
 
-static int
+static void
 imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
 		     const struct i2c_adapter *adap, int did, int freq)
 {
-	int ret;
+	int ret = imanager_i2c_write_freq(i2c->imgr, did, freq);
+	if (ret < 0) {
+		dev_warn(i2c->dev, "%s disabled\n", adap->name);
+		return;
+	}
 
 	info->adapter = *adap;
 	info->adapter.dev.parent = i2c->dev;
@@ -377,15 +381,8 @@ imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
 	ret = i2c_add_adapter(&info->adapter);
 	if (ret) {
 		dev_warn(i2c->dev, "Failed to add %s\n", info->adapter.name);
-		return ret;
+		return;
 	}
-
-	ret = imanager_i2c_write_freq(i2c->imgr, did, freq);
-	if (ret < 0)
-		dev_warn(i2c->dev, "Failed to set bus frequency of %s\n",
-			 info->adapter.name);
-
-	return 0;
 }
 
 static int imanager_i2c_probe(struct platform_device *pdev)
@@ -410,7 +407,7 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	if (attr[I2C_OEM])
 		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
 				     &imanager_i2c_adapters[I2C_OEM],
-				     attr[I2C_OEM]->did, SMBUS_FREQ_400KHZ);
+				     attr[I2C_OEM]->did, SMBUS_FREQ_100KHZ);
 
 	if (attr[SMB_1])
 		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
