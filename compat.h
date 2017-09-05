@@ -71,7 +71,7 @@ static void sysfs_remove_groups(struct kobject *kobj,
 #endif
 #endif
 
-#if !(defined RHEL_MAJOR && RHEL_MAJOR == 7)
+#if !(defined RHEL_MAJOR && RHEL_MAJOR == 7 && RHEL_MINOR >= 1)
 #if !(defined RHEL_MAJOR && RHEL_MAJOR == 6 && RHEL_MINOR >= 7)
 static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 {
