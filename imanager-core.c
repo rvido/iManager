@@ -248,7 +248,7 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 		case ADC5VS5_2:
 		case ADC5VS5_10:
 			adc->attr[1] = attr;
-			adc->label[1] = "+5VS0";
+			adc->label[1] = "+5VS5";
 			adc->num++;
 			break;
 		case CMOSBAT:
@@ -262,7 +262,12 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 		case ADC5VS0:
 		case ADC5VS0_2:
 		case ADC5VS0_10:
-			adc->attr[3] = attr;
+			if (!adc->attr[1]) {
+				adc->attr[1] = attr;
+				adc->label[1] = "+5VS0";
+			} else {
+				adc->attr[3] = attr;
+			}
 			adc->num++;
 			break;
 		case CURRENT:
@@ -431,7 +436,7 @@ static int imanager_read_firmware_version(struct imanager_device_data *imgr)
 	info->firmware_minor = EC_FIRMWARE_MINOR(val);
 
 	val = cpu_to_be16(ver.project_code);
-	info->type = project_code_to_str(EC_PROJECT_CODE(val));
+	info->type = project_code_to_str(val);
 
 	/*
 	 * The PCB name string, in some FW releases, is not Null-terminated,
