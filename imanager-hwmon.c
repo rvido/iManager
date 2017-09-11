@@ -252,6 +252,11 @@ imanager_hwmon_read_fan_ctrl(struct imanager_device_data *imgr, int num,
 
 	fan->valid = false;
 
+	if (!attr) {
+		dev_info(imgr->dev, "Invalid attribute\n");
+		return -EINVAL;
+	}
+
 	ret = imanager_hwmon_read_fan_config(imgr, num, fan);
 	if (ret < 0)
 		return ret;
