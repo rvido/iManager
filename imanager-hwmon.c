@@ -227,6 +227,11 @@ static int imanager_hwmon_read_adc(struct imanager_device_data *imgr, int num,
 
 	adc->valid = false;
 
+	if (!attr) {
+		dev_info(imgr->dev, "Invalid attribute\n");
+		return -EINVAL;
+	}
+
 	ret = imanager_read16(imgr, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
 		return ret;
