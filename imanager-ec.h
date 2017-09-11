@@ -111,7 +111,6 @@
 					((__x >> 4) * 10 + (__x & 0x0f)); })
 #define EC_FIRMWARE_MINOR(x)		EC_KERNEL_MINOR(x)
 #define EC_FIRMWARE_MAJOR(x)		EC_KERNEL_MAJOR(x)
-#define EC_PROJECT_CODE(x)		EC_KERNEL_MINOR(x)
 
 enum imanager_smb_cells { SMB_EEP = 0, I2C_OEM, SMB_1, SMB_PECI };
 
