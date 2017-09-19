@@ -219,67 +219,51 @@ imanager_hwmon_write_fan_alert(struct imanager_device_data *imgr, int fnum,
 				  (u8 *)limits, sizeof(limits));
 }
 
-static int imanager_hwmon_read_adc(struct imanager_device_data *imgr, int num,
-				   struct imanager_hwmon_adc *adc)
+static void
+imanager_hwmon_read_adc(struct imanager_device_data *imgr, int num,
+			struct imanager_hwmon_adc *adc)
 {
 	struct imanager_device_attribute *attr = imgr->ec.hwmon.adc.attr[num];
 	int ret;
 
 	adc->valid = false;
 
-	if (!attr) {
-		dev_info(imgr->dev, "Invalid attribute\n");
-		return -EINVAL;
-	}
-
 	ret = imanager_read16(imgr, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
-		return ret;
-
+		return;
 	adc->value = ret * attr->ecdev->scale;
-	adc->valid = true;
 
-	return 0;
+	adc->valid = true;
 }
 
-static int
-imanager_hwmon_read_fan_ctrl(struct imanager_device_data *imgr, int num,
-			     struct imanager_hwmon_smartfan *fan)
+static void
+imanager_hwmon_read_fan(struct imanager_device_data *imgr, int num,
+			struct imanager_hwmon_smartfan *fan)
 {
 	struct imanager_device_attribute *attr = imgr->ec.hwmon.adc.attr[num];
-
 	int ret;
 
 	fan->valid = false;
 
-	if (!attr) {
-		dev_info(imgr->dev, "Invalid attribute\n");
-		return -EINVAL;
-	}
-
 	ret = imanager_hwmon_read_fan_config(imgr, num, fan);
 	if (ret < 0)
-		return ret;
+		return;
+
+	ret = imanager_hwmon_read_fan_alert(imgr, num, fan);
+	if (ret < 0)
+		return;
 
 	ret = imanager_read16(imgr, EC_CMD_HWP_RD, fan->cfg.tachoid);
 	if (ret < 0)
-		return ret;
-
+		return;
 	fan->speed = ret;
 
 	ret = imanager_read8(imgr, EC_CMD_HWP_RD, attr->did);
 	if (ret < 0)
-		return ret;
-
+		return;
 	fan->pwm = ret;
 
-	ret = imanager_hwmon_read_fan_alert(imgr, num, fan);
-	if (ret < 0)
-		return ret;
-
 	fan->valid = true;
-
-	return 0;
 }
 
 static inline uint in_from_reg(u16 val)
@@ -303,11 +287,13 @@ imanager_hwmon_update_device(struct device *dev)
 	if (time_after(jiffies, data->last_updated + HZ + HZ / 2)) {
 		/* Measured voltages */
 		for (i = 0; i < hwmon->adc.num; i++)
-			imanager_hwmon_read_adc(imgr, i, &data->adc[i]);
+			if (hwmon->adc.attr[i])
+				imanager_hwmon_read_adc(imgr, i, &data->adc[i]);
 
 		/* Measured fan speeds */
 		for (i = 0; i < hwmon->fan.num; i++)
-			imanager_hwmon_read_fan_ctrl(imgr, i, &data->fan[i]);
+			if (hwmon->fan.attr[i])
+				imanager_hwmon_read_fan(imgr, i, &data->fan[i]);
 
 		data->last_updated = jiffies;
 	}
@@ -1201,7 +1187,8 @@ static int imanager_hwmon_probe(struct platform_device *pdev)
 
 	/* read fan control settings */
 	for (i = 0; i < hwmon->fan.num; i++)
-		imanager_hwmon_read_fan_ctrl(imgr, i, &data->fan[i]);
+		if (hwmon->fan.attr[i])
+			imanager_hwmon_read_fan(imgr, i, &data->fan[i]);
 
 	data->groups[num_attr_groups++] = &imanager_group_in;
 
