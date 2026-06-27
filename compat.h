@@ -103,4 +103,8 @@ enum pwm_polarity {
 #endif
 #endif
 
+#ifndef I2C_CLASS_SPD
+#define I2C_CLASS_SPD 0
+#endif
+
 #endif /* __COMPAT_H__ */

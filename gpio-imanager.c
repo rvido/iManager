@@ -12,7 +12,11 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/version.h>
 #include <linux/gpio.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
+#include <linux/gpio/driver.h>
+#endif
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -95,6 +99,16 @@ static int imanager_gpio_get(struct gpio_chip *chip, uint offset)
 	return !!ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+static int imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
+{
+	struct imanager_gpio_data *data = gpiochip_get_data(chip);
+	struct imanager_device_data *imgr = data->imgr;
+	struct imanager_device_attribute *attr = imgr->ec.gpio.attr[offset];
+
+	return imanager_write8(imgr, EC_CMD_HWP_WR, attr->did, val);
+}
+#else
 static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
 {
 	struct imanager_gpio_data *data = gpiochip_get_data(chip);
@@ -103,6 +117,7 @@ static void imanager_gpio_set(struct gpio_chip *chip, uint offset, int val)
 
 	imanager_write8(imgr, EC_CMD_HWP_WR, attr->did, val);
 }
+#endif
 
 static int imanager_gpio_probe(struct platform_device *pdev)
 {

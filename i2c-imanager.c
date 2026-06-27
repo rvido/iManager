@@ -38,11 +38,6 @@
 #define SMBUS_FREQ_100KHZ	0x0200
 #define SMBUS_FREQ_400KHZ	0x0300
 
-struct ec_i2c_status {
-	u32 error	: 7;
-	u32 complete	: 1;
-};
-
 struct adapter_info {
 	struct i2c_adapter adapter;
 	int smb_devid;
@@ -83,14 +78,15 @@ static int imanager_i2c_block_wr_rw_combined(struct imanager_device_data *imgr,
 					     struct imanager_ec_message *msg)
 {
 	int ret;
-	struct ec_i2c_status *status = (struct ec_i2c_status *)&ret;
+	u8 error;
 
 	ret = imanager_write(imgr, msg);
 	if (ret < 0)
 		return ret;
 
-	if (status->error)
-		return imanager_i2c_eval_error(status->error);
+	error = (u8)ret & 0x7F;
+	if (error)
+		return imanager_i2c_eval_error(error);
 
 	if (msg->rlen) {
 		if (msg->rlen == 1)
@@ -362,14 +358,14 @@ static const struct i2c_adapter imanager_i2c_adapters[] = {
 	},
 };
 
-static void
+static int
 imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
 		     const struct i2c_adapter *adap, int did, int freq)
 {
 	int ret = imanager_i2c_write_freq(i2c->imgr, did, freq);
 	if (ret < 0) {
 		dev_warn(i2c->dev, "%s disabled\n", adap->name);
-		return;
+		return ret;
 	}
 
 	info->adapter = *adap;
@@ -381,8 +377,10 @@ imanager_i2c_add_bus(struct imanager_i2c_data *i2c, struct adapter_info *info,
 	ret = i2c_add_adapter(&info->adapter);
 	if (ret) {
 		dev_warn(i2c->dev, "Failed to add %s\n", info->adapter.name);
-		return;
+		return ret;
 	}
+
+	return 0;
 }
 
 static int imanager_i2c_probe(struct platform_device *pdev)
@@ -391,6 +389,7 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	struct imanager_device_data *imgr = dev_get_drvdata(dev->parent);
 	struct imanager_device_attribute **attr = imgr->ec.i2c.attr;
 	struct imanager_i2c_data *data;
+	int ret;
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -399,31 +398,55 @@ static int imanager_i2c_probe(struct platform_device *pdev)
 	data->imgr = imgr;
 	data->dev = dev;
 
-	if (attr[SMB_EEP])
-		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
-				     &imanager_i2c_adapters[SMB_EEP],
-				     attr[SMB_EEP]->did, SMBUS_FREQ_100KHZ);
+	if (attr[SMB_EEP]) {
+		ret = imanager_i2c_add_bus(data, &data->adap_info[data->nadap],
+					     &imanager_i2c_adapters[SMB_EEP],
+					     attr[SMB_EEP]->did, SMBUS_FREQ_100KHZ);
+		if (!ret)
+			data->nadap++;
+	}
 
-	if (attr[I2C_OEM])
-		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
-				     &imanager_i2c_adapters[I2C_OEM],
-				     attr[I2C_OEM]->did, SMBUS_FREQ_100KHZ);
+	if (attr[I2C_OEM]) {
+		ret = imanager_i2c_add_bus(data, &data->adap_info[data->nadap],
+					     &imanager_i2c_adapters[I2C_OEM],
+					     attr[I2C_OEM]->did, SMBUS_FREQ_100KHZ);
+		if (!ret)
+			data->nadap++;
+	}
 
-	if (attr[SMB_1])
-		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
-				     &imanager_i2c_adapters[SMB_1],
-				     attr[SMB_1]->did, SMBUS_FREQ_100KHZ);
+	if (attr[SMB_1]) {
+		ret = imanager_i2c_add_bus(data, &data->adap_info[data->nadap],
+					     &imanager_i2c_adapters[SMB_1],
+					     attr[SMB_1]->did, SMBUS_FREQ_100KHZ);
+		if (!ret)
+			data->nadap++;
+	}
 
-	if (attr[SMB_PECI])
-		imanager_i2c_add_bus(data, &data->adap_info[data->nadap++],
-				     &imanager_i2c_adapters[SMB_PECI],
-				     attr[SMB_PECI]->did, SMBUS_FREQ_100KHZ);
+	if (attr[SMB_PECI]) {
+		ret = imanager_i2c_add_bus(data, &data->adap_info[data->nadap],
+					     &imanager_i2c_adapters[SMB_PECI],
+					     attr[SMB_PECI]->did, SMBUS_FREQ_100KHZ);
+		if (!ret)
+			data->nadap++;
+	}
 
 	platform_set_drvdata(pdev, data);
 
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void imanager_i2c_remove(struct platform_device *pdev)
+{
+	struct imanager_i2c_data *i2c = dev_get_drvdata(&pdev->dev);
+	int i;
+
+	for (i = 0; i < i2c->nadap; i++) {
+		i2c_del_adapter(&i2c->adap_info[i].adapter);
+		i2c_set_adapdata(&i2c->adap_info[i].adapter, NULL);
+	}
+}
+#else
 static int imanager_i2c_remove(struct platform_device *pdev)
 {
 	struct imanager_i2c_data *i2c = dev_get_drvdata(&pdev->dev);
@@ -436,6 +459,7 @@ static int imanager_i2c_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#endif
 
 static struct platform_driver imanager_i2c_driver = {
 	.driver = {

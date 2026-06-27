@@ -43,22 +43,9 @@ struct imanager_backlight_data {
 #endif
 };
 
-struct brightness_level {
-	uint value	: 7,	/* Brightness Value  - LSB [6..0] */
-	     enable	: 1;	/* Brightness Enable - MSB [7] */
-};
-
-struct backlight_ctrl {
-	uint enable	: 1,	/* Backlight Control Enable - LSB [0] */
-	     pwmpol	: 1,	/* PWM Polarity		    - bit [1] */
-	     blpol	: 1,	/* Backlight Polarity	    - bit [2] */
-	     dnc	: 5;	/* Don't care		    - bit [7..3] */
-};
-
 static int imanager_bl_enable(struct imanager_device_data *imgr, int unit)
 {
 	u8 val8;
-	struct brightness_level *ctrl = (struct brightness_level *)&val8;
 	u8 devid = imgr->ec.bl.attr[unit]->did;
 	u8 bl_unit = imgr->ec.bl.brightness[unit];
 	int ret;
@@ -68,7 +55,7 @@ static int imanager_bl_enable(struct imanager_device_data *imgr, int unit)
 	if (ret < 0)
 		return ret;
 
-	ctrl->enable = 1;
+	val8 |= 0x80;
 
 	return imanager_mem_write(imgr, EC_RAM_ACPI, devid, &val8,
 				  sizeof(val8));
@@ -78,7 +65,6 @@ static int
 imanager_bl_set_polarity(struct imanager_device_data *imgr, uint polarity)
 {
 	u8 val8;
-	struct backlight_ctrl *ctrl = (struct backlight_ctrl *)&val8;
 	int ret;
 
 	ret = imanager_mem_read(imgr, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
@@ -86,7 +72,10 @@ imanager_bl_set_polarity(struct imanager_device_data *imgr, uint polarity)
 	if (ret < 0)
 		return ret;
 
-	ctrl->blpol = polarity ? 1 : 0;
+	if (polarity)
+		val8 |= BIT(2);
+	else
+		val8 &= ~BIT(2);
 
 	return imanager_mem_write(imgr, EC_RAM_ACPI, EC_OFFSET_BACKLIGHT_CTRL,
 				  &val8, sizeof(val8));
@@ -116,8 +105,10 @@ static int imanager_bl_set_brightness(struct backlight_device *bd)
 	if (bd->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
 	if (bd->props.fb_blank != FB_BLANK_UNBLANK)
 		brightness = 0;
+#endif
 
 	if (bd->props.state & BL_CORE_SUSPENDED)
 		brightness = 0;

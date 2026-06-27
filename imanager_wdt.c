@@ -82,7 +82,7 @@ static int imanager_wdt_ctrl(struct imanager_device_data *imgr, int ctrl,
 
 	if (ctrl == SET_TIMEOUT) {
 		memset(event, 0xff, sizeof(*event));
-		msg.wlen = sizeof(*event);
+		msg.wlen = 1 + sizeof(*event);
 		*fevent = 0;
 		val = (!timeout) ? 0xffff : cpu_to_be16(timeout * WDT_FREQ);
 
@@ -258,6 +258,20 @@ static int imanager_wdt_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void imanager_wdt_remove(struct platform_device *pdev)
+{
+	struct imanager_wdt_data *data = platform_get_drvdata(pdev);
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 3, 0)
+	if (!nowayout)
+		imanager_wdt_disable_all(data);
+#endif
+
+	watchdog_unregister_device(&data->wdt);
+	platform_set_drvdata(pdev, NULL);
+}
+#else
 static int imanager_wdt_remove(struct platform_device *pdev)
 {
 	struct imanager_wdt_data *data = platform_get_drvdata(pdev);
@@ -272,6 +286,7 @@ static int imanager_wdt_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#endif
 
 static void imanager_wdt_shutdown(struct platform_device *pdev)
 {

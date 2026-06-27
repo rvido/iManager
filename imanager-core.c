@@ -235,6 +235,7 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 			wdt->num++;
 			break;
 		}
+		break;
 	case ADC:
 		switch (attr->did) {
 		case ADC12VS0:
@@ -278,6 +279,7 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 			adc->num++;
 			break;
 		}
+		break;
 	case PWM:
 		switch (attr->did) {
 		case CPUFAN_2P:
@@ -312,6 +314,7 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 			bl->num++;
 			break;
 		}
+		break;
 	case SMB:
 		switch (attr->did) {
 		case SMBEEPROM:
@@ -331,6 +334,7 @@ static void imanager_add_attribute(struct imanager_ec_data *ec,
 			i2c->num++;
 			break;
 		}
+		break;
 	case IRQ:
 		if (attr->did == WDIRQ) {
 			wdt->attr[0] = attr;
@@ -950,6 +954,13 @@ static int imanager_probe(struct platform_device *pdev)
 	return imanager_detect_device(imgr);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void imanager_remove(struct platform_device *pdev)
+{
+	sysfs_remove_group(&pdev->dev.kobj, &imanager_attr_group);
+	mfd_remove_devices(&pdev->dev);
+}
+#else
 static int imanager_remove(struct platform_device *pdev)
 {
 	sysfs_remove_group(&pdev->dev.kobj, &imanager_attr_group);
@@ -957,6 +968,7 @@ static int imanager_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#endif
 
 static struct platform_driver imanager_driver = {
 	.driver = {

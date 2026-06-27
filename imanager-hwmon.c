@@ -178,14 +178,14 @@ imanager_hwmon_write_fan_config(struct imanager_device_data *imgr, int num,
  * FAN max/min alert bits are stored as bit pairs in a 8-bit register.
  * FAN0~2: 2:{max2, min2}, 1:{max1, min1}, 0:{max0, min0}
  */
-#define IS_FAN_ALERT_MIN(fan_num, var) test_bit(BIT((fan_num) << 1), var)
-#define IS_FAN_ALERT_MAX(fan_num, var) test_bit(BIT(((fan_num) << 1) + 1), var)
+#define IS_FAN_ALERT_MIN(fan_num, var) test_bit((fan_num) << 1, var)
+#define IS_FAN_ALERT_MAX(fan_num, var) test_bit(((fan_num) << 1) + 1, var)
 
 static int
 imanager_hwmon_read_fan_alert(struct imanager_device_data *imgr, int num,
 			      struct imanager_hwmon_smartfan *fan)
 {
-	const ulong alert_flags = 0;
+	unsigned long alert_flags = 0;
 	int ret;
 
 	ret = imanager_mem_read(imgr, EC_RAM_ACPI, EC_OFFSET_FAN_ALERT,
@@ -240,7 +240,7 @@ static void
 imanager_hwmon_read_fan(struct imanager_device_data *imgr, int num,
 			struct imanager_hwmon_smartfan *fan)
 {
-	struct imanager_device_attribute *attr = imgr->ec.hwmon.adc.attr[num];
+	struct imanager_device_attribute *attr = imgr->ec.hwmon.fan.attr[num];
 	int ret;
 
 	fan->valid = false;
@@ -767,7 +767,7 @@ static ssize_t store_temp_min(struct device *dev, struct device_attribute *attr,
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
-	long val = 0;
+	unsigned long val = 0;
 	int err;
 
 	if (ctrl->mode != MODE_AUTO)
@@ -805,7 +805,7 @@ store_temp_max(struct device *dev, struct device_attribute *attr,
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
 	struct fan_ctrl *ctrl = (struct fan_ctrl *)&fan->cfg.control;
-	long val = 0;
+	unsigned long val = 0;
 	int err;
 
 	if (ctrl->mode != MODE_AUTO)
@@ -832,7 +832,7 @@ store_pwm_min(struct device *dev, struct device_attribute *attr,
 	struct imanager_device_data *imgr = data->imgr;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
-	long val = 0;
+	unsigned long val = 0;
 	int err;
 
 	err = kstrtoul(buf, 10, &val);
@@ -855,7 +855,7 @@ store_pwm_max(struct device *dev, struct device_attribute *attr,
 	struct imanager_device_data *imgr = data->imgr;
 	int nr = to_sensor_dev_attr(attr)->index - 1;
 	struct imanager_hwmon_smartfan *fan = &data->fan[nr];
-	long val = 0;
+	unsigned long val = 0;
 	int err;
 
 	err = kstrtoul(buf, 10, &val);
